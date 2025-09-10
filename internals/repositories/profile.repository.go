@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"context"
+	"log"
 
 	"github.com/federus1105/weekly/internals/models"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -35,7 +36,7 @@ WHERE u.id = $1;`
 	var profiles []models.Profile
 	for rows.Next() {
 		var Profile models.Profile
-		if err := rows.Scan(&Profile.ID, &Profile.Email, &Profile.Image, &Profile.FisrtName, &Profile.LastName, &Profile.Phone); err != nil {
+		if err := rows.Scan(&Profile.ID, &Profile.Email, &Profile.Image, &Profile.FirstName, &Profile.LastName, &Profile.Phone); err != nil {
 			return nil, err
 		}
 		profiles = append(profiles, Profile)
@@ -43,14 +44,15 @@ WHERE u.id = $1;`
 	return profiles, nil
 }
 
-// func (s *ProfileRepository) EditProfile(rctx context.Context, image string, firstname string, lastname string, phonenumber string, id int) (models.Profile, error) {
-// 	sql := "UPDATE account SET images=$1 WHERE id=$2 RETURNING id, name, images"
-// 	values := []any{image, id}
-// 	var profile models.Profile
-// 	err := s.db.QueryRow(rctx, sql, values...).Scan(&profile.ID, &profile.Image, &profile.FisrtName, &profile.LastName, &profile.Phone)
-// 	if err != nil {
-// 		log.Println("Internal server error.\nCause: ", err.Error())
-// 		return models.Profile{}, err
-// 	}
-// 	return profile, nil
-// }
+func (s *ProfileRepository) EditProfile(rctx context.Context, firstname string, lastname string, phonenumber string, id int) (models.Profile, error) {
+	sql := "UPDATE account SET firstname=$1, lastname=$2, phonenumber=$3 WHERE id =$4 RETURNING id, firstname, lastname, phonenumber"
+	log.Println("Updating profile: ", firstname, lastname, phonenumber, id)
+	values := []any{ firstname, lastname, phonenumber, id}
+	var profile models.Profile
+	err := s.db.QueryRow(rctx, sql, values...).Scan(&profile.ID, &profile.FirstName, &profile.LastName, &profile.Phone)
+	if err != nil {
+		log.Println("Internal server error.\nCause: ", err.Error())
+		return models.Profile{}, err
+	}
+	return profile, nil
+}

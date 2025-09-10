@@ -1,0 +1,220 @@
+basePath: /
+definitions:
+  models.Order:
+    properties:
+      email:
+        type: string
+      fullname:
+        type: string
+      id:
+        type: integer
+      paid:
+        type: boolean
+      payment:
+        type: integer
+      phone:
+        type: string
+      schedule:
+        type: integer
+      total:
+        type: number
+      user:
+        type: integer
+    required:
+    - email
+    - fullname
+    - payment
+    - phone
+    - schedule
+    - user
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: Restful API craeted using gin for Koda Batch 3
+  title: Weekly 10 Koda
+  version: "1.0"
+paths:
+  /history/{id}:
+    get:
+      parameters:
+      - description: ID History
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get History
+      tags:
+      - History
+  /movies/{id}:
+    get:
+      parameters:
+      - description: Movie Detail
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get Detail Movie
+      tags:
+      - Movies
+  /movies/allmovie:
+    get:
+      parameters:
+      - description: Page
+        in: query
+        name: page
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get All Movie
+      tags:
+      - Movies
+  /movies/filter:
+    get:
+      parameters:
+      - description: Page
+        in: query
+        name: page
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get Filter movies
+      tags:
+      - Movies
+  /movies/popular:
+    get:
+      parameters:
+      - description: Page
+        in: query
+        name: page
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get Popular movies
+      tags:
+      - Movies
+  /movies/upcoming:
+    get:
+      parameters:
+      - description: Page
+        in: query
+        name: page
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get upcoming movies
+      tags:
+      - Movies
+  /orders:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Order Request
+        in: body
+        name: order
+        required: true
+        schema:
+          $ref: '#/definitions/models.Order'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.Order'
+      summary: Create a new order
+      tags:
+      - Orders
+  /profile/{id}:
+    get:
+      parameters:
+      - description: ID Profile
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get Profile
+      tags:
+      - Profile
+  /schedule/{id}:
+    get:
+      parameters:
+      - description: Movie Schedule
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get Schedule
+      tags:
+      - Schedule
+  /seats/:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get available seat
+      tags:
+      - Seat
+swagger: "2.0"

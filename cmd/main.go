@@ -1,15 +1,11 @@
 package main
 
 import (
-	"context"
-	"fmt"
 	"log"
 	"os"
 
 	"github.com/federus1105/weekly/internals/configs"
-	"github.com/federus1105/weekly/internals/repositories"
 	"github.com/federus1105/weekly/internals/routers"
-	"github.com/federus1105/weekly/pkg"
 	"github.com/joho/godotenv"
 )
 
@@ -38,18 +34,6 @@ func main() {
 	router := routers.InitRouter(db)
 
 	router.Run("localhost:8080")
-	hc := pkg.NewHashConfig()
-	hc.UseRecommended()
-
-	repo := repositories.NewAuthRepository(db)
-	users, err := repo.GetAllUsers(context.Background())
-	if err != nil {
-		log.Fatal("Error GetAllUsers:", err)
-	}
-
-	for _, u := range users {
-		fmt.Println(u.Email, u.Role)
-	}
 
 	// users, _ := hc.Login()
 	// for _, user := range users {
