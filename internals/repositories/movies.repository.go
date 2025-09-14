@@ -289,23 +289,25 @@ func (mr *MoviesRepository) CreateMovie(rctx context.Context, body models.MovieC
 	}
 
 	defer tx.Rollback(rctx)
- // format ke string tanggal saja
+	// format ke string tanggal saja
 
 	// Insert ke tabel movies
-	sql := `INSERT INTO movies (title, release_date, duration, synopsis, id_director, rating)
-			VALUES ($1, $2, $3, $4, $5, $6)
-			RETURNING id, title, release_date, duration, synopsis, id_director, rating`
-	values := []any{body.Title, body.ReleaseDate, body.Duration, body.Synopsis, body.Director, body.Rating}
+	sql := `INSERT INTO movies (title, release_date, duration, synopsis, id_director, rating, image, backdrop)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		RETURNING id, title, release_date, duration, synopsis, id_director, rating, image, backdrop`
+	values := []any{body.Title, body.ReleaseDate, body.Duration, body.Synopsis, body.Director, body.Rating, body.Image,
+		body.Backdrop}
 
 	var newMovie models.MovieCreate
 	if err := tx.QueryRow(rctx, sql, values...).Scan(
-		&newMovie.Id,
 		&newMovie.Title,
 		&newMovie.ReleaseDate,
 		&newMovie.Duration,
 		&newMovie.Synopsis,
 		&newMovie.Director,
 		&newMovie.Rating,
+		&newMovie.Image,
+		&newMovie.Backdrop,
 	); err != nil {
 		log.Println("Failed to insert movie:", err)
 		return models.MovieCreate{}, err
@@ -313,7 +315,7 @@ func (mr *MoviesRepository) CreateMovie(rctx context.Context, body models.MovieC
 
 	// Insert ke tabel movies_actor
 	for _, actorID := range body.ActorIDs {
-		actorSQL := `INSERT INTO movies_actor (id_movies, id_actor) VALUES ($1, $2)`
+		actorSQL := `INSERT INTO movies_actor (id_movie, id_actor) VALUES ($1, $2)`
 		if _, err := tx.Exec(rctx, actorSQL, newMovie.Id, actorID); err != nil {
 			log.Println("Failed to insert actor relation:", err)
 			return models.MovieCreate{}, err
@@ -327,6 +329,7 @@ func (mr *MoviesRepository) CreateMovie(rctx context.Context, body models.MovieC
 			log.Println("Failed to insert genre relation:", err)
 			return models.MovieCreate{}, err
 		}
+
 	}
 
 	// Commit transaksi
