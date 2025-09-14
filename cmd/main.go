@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"fmt"
 	"log"
 	"os"
 
@@ -14,9 +16,12 @@ import (
 // @description	Restful API craeted using gin for Koda Batch 3
 // @host		localhost:8080
 // @basepath	/
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
 func main() {
 	if err := godotenv.Load(); err != nil {
-		log.Println("Failed to load env\nCause:", err.Error())
+		log.Println("❌ Failed to load env\nCause:", err.Error())
 		return
 	}
 	log.Println(os.Getenv("DBUSER"))
@@ -24,42 +29,27 @@ func main() {
 	// inisialisasi DB
 	db, err := configs.InitDB()
 	if err != nil {
-		log.Println("Failed to connect to database\nCause: ", err.Error())
+		log.Println("❌ Failed to connect to database\nCause: ", err.Error())
 		return
 	}
 	defer db.Close()
 
-	log.Println("DB Connected")
+	log.Println("✅ DB Connected")
 
-	router := routers.InitRouter(db)
+	// Inisialisasi RDB
+	rdb, err := configs.InitRDB()
+	if err != nil {
+		log.Println("❌ Failed to connect to redis\nCause: ", err.Error())
+		return
+	}
+	defer rdb.Close()
+	if _, err := rdb.Ping(context.Background()).Result(); err != nil {
+		fmt.Println("Failed Connected Redis : ", err.Error())
+		return
+	}
+	log.Println("✅ REDIS Connected")
+
+	router := routers.InitRouter(db, rdb)
 
 	router.Run("localhost:8080")
-
-	// users, _ := hc.Login()
-	// for _, user := range users {
-	// 	hashed, err := hc.GenHash(user.Password)
-	// 	if err != nil {
-	// 		log.Println("Gagal hash password:", user.Email)
-	// 		continue
-	// 	}
-
-	// 	err = hc.UpdateUserPassword(user.Id, hashed)
-	// 	if err != nil {
-	// 		log.Println("Gagal update password user:", user.Email)
-	// 	} else {
-	// 		log.Println("Password berhasil di-hash untuk:", user.Email)
-	// 	}
-	// }
-	// password := "koda"
-	// hash, err := hc.GenHash(password)
-	// if err != nil {
-	// 	fmt.Println(err.Error())
-	// 	return
-	// }
-	// isMatch, err := hc.CompareHashAndPassword(password, hash)
-	// if err != nil {
-	// 	fmt.Println(err)
-	// 	return
-	// }
-	// fmt.Println(isMatch)
 }

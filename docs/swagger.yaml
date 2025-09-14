@@ -26,7 +26,39 @@ definitions:
     - payment
     - phone
     - schedule
-    - user
+    type: object
+  models.UserAuth:
+    properties:
+      email:
+        type: string
+      password:
+        minLength: 4
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  models.UserRegister:
+    properties:
+      email:
+        type: string
+      id:
+        type: integer
+      id_account:
+        type: integer
+      isactive:
+        type: boolean
+      password:
+        minLength: 4
+        type: string
+      role:
+        type: string
+    required:
+    - email
+    - id_account
+    - isactive
+    - password
+    - role
     type: object
 host: localhost:8080
 info:
@@ -35,8 +67,51 @@ info:
   title: Weekly 10 Koda
   version: "1.0"
 paths:
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Login
+        in: body
+        name: order
+        required: true
+        schema:
+          $ref: '#/definitions/models.UserAuth'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.UserAuth'
+      summary: Login
+      tags:
+      - Authentication
+  /auth/register:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Register
+        in: body
+        name: order
+        required: true
+        schema:
+          $ref: '#/definitions/models.UserRegister'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.UserRegister'
+      summary: Register
+      tags:
+      - Authentication
   /history/{id}:
     get:
+      description: Mengambil detail histori berdasarkan ID
       parameters:
       - description: ID History
         in: path
@@ -51,7 +126,9 @@ paths:
           schema:
             additionalProperties: true
             type: object
-      summary: Get History
+      security:
+      - BearerAuth: []
+      summary: Get History by ID
       tags:
       - History
   /movies/{id}:
@@ -70,6 +147,8 @@ paths:
           schema:
             additionalProperties: true
             type: object
+      security:
+      - BearerAuth: []
       summary: Get Detail Movie
       tags:
       - Movies
@@ -88,6 +167,8 @@ paths:
           schema:
             additionalProperties: true
             type: object
+      security:
+      - BearerAuth: []
       summary: Get All Movie
       tags:
       - Movies
@@ -145,7 +226,7 @@ paths:
       summary: Get upcoming movies
       tags:
       - Movies
-  /orders:
+  /order:
     post:
       consumes:
       - application/json
@@ -163,6 +244,8 @@ paths:
           description: Created
           schema:
             $ref: '#/definitions/models.Order'
+      security:
+      - BearerAuth: []
       summary: Create a new order
       tags:
       - Orders
@@ -182,6 +265,8 @@ paths:
           schema:
             additionalProperties: true
             type: object
+      security:
+      - BearerAuth: []
       summary: Get Profile
       tags:
       - Profile
@@ -201,11 +286,19 @@ paths:
           schema:
             additionalProperties: true
             type: object
+      security:
+      - BearerAuth: []
       summary: Get Schedule
       tags:
       - Schedule
-  /seats/:
+  /seats/{id}:
     get:
+      parameters:
+      - description: ID Schedule
+        in: path
+        name: id
+        required: true
+        type: integer
       produces:
       - application/json
       responses:
@@ -214,7 +307,14 @@ paths:
           schema:
             additionalProperties: true
             type: object
+      security:
+      - BearerAuth: []
       summary: Get available seat
       tags:
       - Seat
+securityDefinitions:
+  BearerAuth:
+    in: header
+    name: Authorization
+    type: apiKey
 swagger: "2.0"

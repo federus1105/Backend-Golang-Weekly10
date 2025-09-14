@@ -7,13 +7,14 @@ import (
 	"github.com/federus1105/weekly/internals/models"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 
 	docs "github.com/federus1105/weekly/docs"
 	swaggerfiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
-func InitRouter(db *pgxpool.Pool) *gin.Engine {
+func InitRouter(db *pgxpool.Pool, rdb *redis.Client) *gin.Engine {
 	router := gin.Default()
 	router.Use(middlewares.MyLogger)
 	router.Use(middlewares.CORSMiddleware)
@@ -32,8 +33,8 @@ func InitRouter(db *pgxpool.Pool) *gin.Engine {
 	router.Static("/img", "public")
 
 	InitAuthRouter(router, db)
-	InitMoviesRouter(router, db)
-	InitScheduleRouter(router, db)
+	InitMoviesRouter(router, db, rdb)
+	InitScheduleRouter(router, db,rdb)
 	InitSeatsRouter(router, db)
 	InitProfileRouter(router, db)
 	InitOrderRouter(router, db)

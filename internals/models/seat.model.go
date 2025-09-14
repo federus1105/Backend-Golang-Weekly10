@@ -1,11 +1,14 @@
 package models
 
-import "encoding/json"
+import (
+	"encoding/json"
+)
 
 type Seat struct {
-	Id     int    `db:"id" json:"id"`
-	Code   string `db:"codeseat" json:"seat"`
-	Status bool   `db:"isstatus" json:"status"`
+	Id     int     `db:"id" json:"id"`
+	Code   string  `db:"codeseat" json:"seat"`
+	Status bool    `db:"isstatus" json:"status"`
+	Price  float64 `db:"price" json:"price"`
 }
 type seatAlias Seat // alias to avoid recursion
 
@@ -15,7 +18,7 @@ func (s Seat) MarshalJSON() ([]byte, error) {
 		Status string `json:"status"`
 	}{
 		seatAlias: seatAlias(s),
-		Status:    "tidak tersedia",
+		Status:    "Terjual",
 	}
 
 	if s.Status {

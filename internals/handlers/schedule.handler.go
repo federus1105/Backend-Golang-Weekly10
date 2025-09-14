@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -22,18 +23,19 @@ func NewScheduleHandler(sr *repositories.ScheduleRepository) *ScheduleHandler {
 // @Produce json
 // @Param id path int true "Movie Schedule"
 // @Success 200 {object} map[string]interface{}
+// @Security BearerAuth
 // @Router /schedule/{id} [get]
 func (sh *ScheduleHandler) GetSchedule(ctx *gin.Context) {
-	scheduleIDStr := ctx.Param("movie_id")
+	scheduleIDStr := ctx.Param("id")
 	schedule, err := strconv.Atoi(scheduleIDStr)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
-			"message": "movie id tidak valid",
+			"message": "Data tidak ada",
 		})
 		return
 	}
-
+	fmt.Println("Result Schedules:", schedule)
 	schedules, err := sh.sr.GetSchedule(ctx.Request.Context(), schedule)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{

@@ -17,11 +17,13 @@ func NewHistoryHandler(hr *repositories.HistoryRepository) *HistoryHandler {
 }
 
 // GetHistory godoc
-// @Summary Get History
+// @Summary Get History by ID
+// @Description Mengambil detail histori berdasarkan ID
 // @Tags History
 // @Produce json
 // @Param id path int true "ID History"
 // @Success 200 {object} map[string]interface{}
+// @Security BearerAuth
 // @Router /history/{id} [get]
 func (hr *HistoryHandler) GetHistory(ctx *gin.Context) {
 	historyIDstr := ctx.Param("id")

@@ -60,7 +60,6 @@ func (hc *HashConfig) HashPassword(password string) (string, error) {
 	return encodedHash, nil
 }
 
-// func (h *HashConfig) GenHash(password string) (string, error) {
 func (h *HashConfig) GenHash(password string) (string, error) {
 	salt, err := h.genSalt()
 	if err != nil {
@@ -85,48 +84,90 @@ func (h *HashConfig) genSalt() ([]byte, error) {
 
 func (h *HashConfig) CompareHashAndPassword(password, hashedPassword string) (bool, error) {
 	result := strings.Split(hashedPassword, "$")
-	fmt.Println(len(result), result)
-	// cek panjang hasil split, kalau bukan 6 maka format hash invalid
 	if len(result) != 6 {
 		return false, errors.New("invalid hash format")
 	}
-	// cek kriptografi yang digunakan
 	if result[1] != "argon2id" {
 		return false, errors.New("invalid crypto method")
 	}
-	// cek versi nya
 	var version int
 	fmt.Sscanf(result[2], "v=%d", &version)
 	if version != argon2.Version {
 		return false, errors.New("invalid argon2id version")
 	}
-	// ambil konfigurasi memory, time dan thread
-	if _, err := fmt.Sscanf(result[3], "m=%d,t=%d,p=%d", &h.Memory, &h.Time, &h.Thread); err != nil {
+
+	var memory, time, threads uint32
+	_, err := fmt.Sscanf(result[3], "m=%d,t=%d,p=%d", &memory, &time, &threads)
+	if err != nil {
 		return false, errors.New("invalid format")
 	}
-	// ambil nilai salt
+	h.Memory = memory
+	h.Time = time
+	h.Thread = uint8(threads)
+
 	salt, err := base64.RawStdEncoding.DecodeString(result[4])
 	if err != nil {
 		return false, err
 	}
 	h.SaltLen = uint32(len(salt))
-	// ambil nilai hash
+
 	hash, err := base64.RawStdEncoding.DecodeString(result[5])
 	if err != nil {
 		return false, err
 	}
 	h.KeyLen = uint32(len(hash))
 
-	// Comparison
-	// Generate Hash dari password
 	hashPwd := argon2.IDKey([]byte(password), salt, h.Time, h.Memory, h.Thread, h.KeyLen)
-	// komparasi hasil hash dengan waktu tidak konstan
-	// if slices.Compare(hash, hashPwd) != 0 {
-	// 	return false, nil
-	// }
-	// komparasi hasil hash dengan waktu konstan (lebih aman dari timing attack di hash)
-	if subtle.ConstantTimeCompare(hash, hashPwd) == 0 {
+	if subtle.ConstantTimeCompare(hash, hashPwd) != 1 {
 		return false, nil
 	}
 	return true, nil
 }
+
+// func (h *HashConfig) CompareHashAndPassword(password, hashedPassword string) (bool, error) {
+// 	result := strings.Split(hashedPassword, "$")
+// 	fmt.Println(len(result), result)
+// 	// cek panjang hasil split, kalau bukan 6 maka format hash invalid
+// 	if len(result) != 6 {
+// 		return false, errors.New("invalid hash format")
+// 	}
+// 	// cek kriptografi yang digunakan
+// 	if result[1] != "argon2id" {
+// 		return false, errors.New("invalid crypto method")
+// 	}
+// 	// cek versi nya
+// 	var version int
+// 	fmt.Sscanf(result[2], "v=%d", &version)
+// 	if version != argon2.Version {
+// 		return false, errors.New("invalid argon2id version")
+// 	}
+// 	// ambil konfigurasi memory, time dan thread
+// 	if _, err := fmt.Sscanf(result[3], "m=%d,t=%d,p=%d", &h.Memory, &h.Time, &h.Thread); err != nil {
+// 		return false, errors.New("invalid format")
+// 	}
+// 	// ambil nilai salt
+// 	salt, err := base64.RawStdEncoding.DecodeString(result[4])
+// 	if err != nil {
+// 		return false, err
+// 	}
+// 	h.SaltLen = uint32(len(salt))
+// 	// ambil nilai hash
+// 	hash, err := base64.RawStdEncoding.DecodeString(result[5])
+// 	if err != nil {
+// 		return false, err
+// 	}
+// 	h.KeyLen = uint32(len(hash))
+
+// 	// Comparison
+// 	// Generate Hash dari password
+// 	hashPwd := argon2.IDKey([]byte(password), salt, h.Time, h.Memory, h.Thread, h.KeyLen)
+// 	// komparasi hasil hash dengan waktu tidak konstan
+// 	// if slices.Compare(hash, hashPwd) != 0 {
+// 	// 	return false, nil
+// 	// }
+// 	// komparasi hasil hash dengan waktu konstan (lebih aman dari timing attack di hash)
+// 	if subtle.ConstantTimeCompare(hash, hashPwd) == 0 {
+// 		return false, nil
+// 	}
+// 	return true, nil
+// }

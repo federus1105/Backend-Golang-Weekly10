@@ -20,6 +20,14 @@ func NewAuthHandler(ar *repositories.AuthRepository) *AuthHandler {
 	return &AuthHandler{ar: ar}
 }
 
+// Login godoc
+// @Summary Login
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Param order body models.UserAuth true "Login"
+// @Success 201 {object} models.UserAuth
+// @Router /auth/login [post]
 func (a *AuthHandler) Login(ctx *gin.Context) {
 	// menerima body
 	var body models.UserAuth
@@ -92,7 +100,7 @@ func (a *AuthHandler) Login(ctx *gin.Context) {
 		log.Println("Internal Server Error.\nCause: ", err)
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
-			"error":   "internal server error",
+			"error":   "internal server errorrr",
 		})
 		return
 	}
@@ -103,7 +111,15 @@ func (a *AuthHandler) Login(ctx *gin.Context) {
 
 }
 
-func (a *AuthHandler) CreateUser(ctx *gin.Context) {
+// Register godoc
+// @Summary Register
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Param order body models.UserRegister true "Register"
+// @Success 201 {object} models.UserRegister
+// @Router /auth/register [post]
+func (a *AuthHandler) Register(ctx *gin.Context) {
 	var body models.UserRegister
 	if err := ctx.ShouldBindJSON(&body); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{
@@ -112,66 +128,53 @@ func (a *AuthHandler) CreateUser(ctx *gin.Context) {
 		})
 		return
 	}
-	// You can add further logic to process the order here
-	ctx.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"order":   body,
-	})
-}
-
-func (a *AuthHandler) MigrateHashPasswords(ctx *gin.Context) {
-	log.Println("[DEBUG] Mulai migrasi password")
-
-	users, err := a.ar.GetAllUsers(ctx.Request.Context())
+	newOrder, err := a.ar.Register(ctx.Request.Context(), body)
 	if err != nil {
-		log.Println("[ERROR] Gagal GetAllUsers:", err)
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
-			"error":   "Gagal mengambil data user",
+			"error":   err.Error(),
 		})
 		return
 	}
+	// You can add further logic to process the order here
+	ctx.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"order":   newOrder,
+	})
+}
 
-	log.Printf("[DEBUG] Jumlah user: %d", len(users))
-
-	hc := pkg.NewHashConfig()
-	hc.UseRecommended()
-
-	var successCount int
-	var failed []string
-
-	for _, user := range users {
-		log.Printf("[DEBUG] Memproses user: %s", user.Email)
-
-		if user.Password == "" {
-			log.Printf("[WARN] Password kosong untuk user: %s", user.Email)
-			failed = append(failed, user.Email)
-			continue
-		}
-
-		// Gunakan GenHash untuk format yang sesuai
-		hashed, err := hc.GenHash(user.Password)
-		if err != nil {
-			log.Printf("[ERROR] Hash gagal untuk %s: %v", user.Email, err)
-			failed = append(failed, user.Email)
-			continue
-		}
-
-		err = a.ar.UpdateUserPassword(ctx.Request.Context(), uint(user.Id), hashed)
-		if err != nil {
-			log.Printf("[ERROR] Update gagal untuk %s: %v", user.Email, err)
-			failed = append(failed, user.Email)
-			continue
-		}
-
-		successCount++
+func (h *AuthHandler) ResetPassword(c *gin.Context) {
+	var body models.ChangePassword
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 
-	log.Println("[DEBUG] Migrasi selesai")
-	ctx.JSON(http.StatusOK, gin.H{
-		"success":       true,
-		"message":       "Migrasi password selesai",
-		"success_count": successCount,
-		"failed_users":  failed,
+	userIDInterface, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	userID, ok := userIDInterface.(int) // pastikan tipe sesuai
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal error"})
+		return
+	}
+
+	err := h.ar.ResetPassword(c.Request.Context(), userID, body.OldPassword, body.NewPassword)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Password berhasil direset"})
+}
+
+func (h *AuthHandler) Logout(c *gin.Context) {
+	// Hanya memberitahu user untuk hapus token dari client
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Logout berhasil. Silakan hapus token di sisi client.",
 	})
 }

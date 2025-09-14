@@ -19,7 +19,7 @@ func (hr *HistoryRepository) GetHistory(rctx context.Context, Id int) ([]models.
 	sql := `SELECT
   o.id AS id_order,
   m.title AS movie_title,
-  STRING_AGG(CAST(os.id_seats as VARCHAR(20)), ', ') AS seat_codes,
+  STRING_AGG(s2.codeseat, ', ') AS seat_codes,
   COUNT(os.id_seats) AS total_seats,
   t.name AS time_name,
   o.total,
@@ -31,8 +31,9 @@ JOIN movies m ON s.id_movie = m.id
 JOIN cinema c ON s.id_cinema = c.id
 JOIN time t ON s.id_time = t.id
 LEFT JOIN order_seat os ON o.id = os.id_order
+LEFT JOIN seats s2 ON os.id_seats = s2.id 
 WHERE o.id = $1
-GROUP BY o.id, m.title, t.name, o.total, c.name
+GROUP BY o.id, m.title, t.name, o.total, c.name, o.paid
 ORDER BY o.created_at ASC;`
 
 	rows, err := hr.db.Query(rctx, sql, Id)

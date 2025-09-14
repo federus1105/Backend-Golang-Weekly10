@@ -22,6 +22,32 @@ func NewMoviesRepository(db *pgxpool.Pool, rdb *redis.Client) *MoviesRepository 
 }
 
 func (mr *MoviesRepository) GetUpcomingMovies(rctx context.Context, limit, offset int) ([]models.Movie, error) {
+	start := time.Now()
+	redisKey := "firdaus:popular-movies"
+	cmd := mr.rdb.Get(rctx, redisKey)
+	if cmd.Err() != nil {
+		if cmd.Err() == redis.Nil {
+			log.Printf("Key %s does not exist\n", redisKey)
+		} else {
+			log.Println("Redis Error. \nCause: ", cmd.Err().Error())
+		}
+	} else {
+		// cache hit
+		var cachedSchedules []models.Movie
+		cmdByte, err := cmd.Bytes()
+		if err != nil {
+			log.Println("Internal server error.\nCause: ", err.Error())
+		} else {
+			if err := json.Unmarshal(cmdByte, &cachedSchedules); err != nil {
+				log.Println("Internal Server Error. \nCause: ", err.Error())
+			}
+		}
+		if len(cachedSchedules) > 0 {
+			log.Printf("Key %s found in cache ✅", redisKey)
+			log.Printf("Served in %s using Redis", time.Since(start))
+			return cachedSchedules, nil
+		}
+	}
 	// ambil data movie
 	sql := `SELECT 
     m.id,
@@ -37,6 +63,7 @@ GROUP BY m.id, m.image, m.title, m.release_date
 ORDER BY m.release_date ASC
 LIMIT $1 OFFSET $2
 `
+
 	rows, err := mr.db.Query(rctx, sql, limit, offset)
 	if err != nil {
 		log.Println("Internal Server Error: ", err.Error())
@@ -52,15 +79,52 @@ LIMIT $1 OFFSET $2
 		}
 		movies = append(movies, movie)
 	}
+	// renew cache
+	if offset == 0 {
+		bt, err := json.Marshal(movies)
+		if err != nil {
+			log.Println("Internal Server Error.\n Cause: ", err.Error())
+		}
+		if err := mr.rdb.Set(rctx, redisKey, string(bt), 1*time.Minute).Err(); err != nil {
+			log.Println("Redis Error. \nCause: ", err.Error())
+		}
+	}
+	log.Printf("[REDIS TIMING] Served in %s using DB (cache miss)", time.Since(start))
 	return movies, nil
 }
 
 func (mr *MoviesRepository) GetPopularMovies(rctx context.Context, limit, offset int) ([]models.Movie, error) {
+	start := time.Now()
+	redisKey := "firdaus:popular-movies"
+	cmd := mr.rdb.Get(rctx, redisKey)
+	if cmd.Err() != nil {
+		if cmd.Err() == redis.Nil {
+			log.Printf("Key %s does not exist\n", redisKey)
+		} else {
+			log.Println("Redis Error. \nCause: ", cmd.Err().Error())
+		}
+	} else {
+		// cache hit
+		var cachedSchedules []models.Movie
+		cmdByte, err := cmd.Bytes()
+		if err != nil {
+			log.Println("Internal server error.\nCause: ", err.Error())
+		} else {
+			if err := json.Unmarshal(cmdByte, &cachedSchedules); err != nil {
+				log.Println("Internal Server Error. \nCause: ", err.Error())
+			}
+		}
+		if len(cachedSchedules) > 0 {
+			log.Printf("Key %s found in cache ✅", redisKey)
+			log.Printf("Served in %s using Redis", time.Since(start))
+			return cachedSchedules, nil
+		}
+	}
 	sql := `
 SELECT 
   m.id,
-  m.title,
   m.image,
+  m.title,
   STRING_AGG(g.name, ', ') AS genres
 FROM movies m
 JOIN movies_genre mg ON m.id = mg.id_movies
@@ -79,12 +143,23 @@ LIMIT $1 OFFSET $2
 	var movies []models.Movie
 	for rows.Next() {
 		var movie models.Movie
-		if err := rows.Scan(&movie.Id, &movie.Title, &movie.Image, &movie.Genres); err != nil {
+		if err := rows.Scan(&movie.Id, &movie.Image, &movie.Title, &movie.Genres); err != nil {
 			log.Println("Internal Server Error: ", err.Error())
 			return nil, err
 		}
 		movies = append(movies, movie)
 	}
+	// renew cache
+	if offset == 0 {
+		bt, err := json.Marshal(movies)
+		if err != nil {
+			log.Println("Internal Server Error.\n Cause: ", err.Error())
+		}
+		if err := mr.rdb.Set(rctx, redisKey, string(bt), 1*time.Minute).Err(); err != nil {
+			log.Println("Redis Error. \nCause: ", err.Error())
+		}
+	}
+	log.Printf("[REDIS TIMING] Served in %s using DB (cache miss)", time.Since(start))
 	return movies, nil
 }
 
@@ -281,16 +356,14 @@ func (mr *MoviesRepository) EditMovie(rctx context.Context, Image, Title, Durati
 	return movie, nil
 }
 
-func (mr *MoviesRepository) CreateMovie(rctx context.Context, body models.MovieCreate) (models.MovieCreate, error) {
+func (mr *MoviesRepository) CreateMovie(rctx context.Context, body models.MovieBody) (models.MovieBody, error) {
 	tx, err := mr.db.Begin(rctx)
 	if err != nil {
 		log.Println("Failed to begin transaction:", err)
-		return models.MovieCreate{}, err
+		return models.MovieBody{}, err
 	}
 
 	defer tx.Rollback(rctx)
-	// format ke string tanggal saja
-
 	// Insert ke tabel movies
 	sql := `INSERT INTO movies (title, release_date, duration, synopsis, id_director, rating, image, backdrop)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -298,8 +371,9 @@ func (mr *MoviesRepository) CreateMovie(rctx context.Context, body models.MovieC
 	values := []any{body.Title, body.ReleaseDate, body.Duration, body.Synopsis, body.Director, body.Rating, body.Image,
 		body.Backdrop}
 
-	var newMovie models.MovieCreate
+	var newMovie models.MovieBody
 	if err := tx.QueryRow(rctx, sql, values...).Scan(
+		&newMovie.Id,
 		&newMovie.Title,
 		&newMovie.ReleaseDate,
 		&newMovie.Duration,
@@ -310,7 +384,7 @@ func (mr *MoviesRepository) CreateMovie(rctx context.Context, body models.MovieC
 		&newMovie.Backdrop,
 	); err != nil {
 		log.Println("Failed to insert movie:", err)
-		return models.MovieCreate{}, err
+		return models.MovieBody{}, err
 	}
 
 	// Insert ke tabel movies_actor
@@ -318,7 +392,7 @@ func (mr *MoviesRepository) CreateMovie(rctx context.Context, body models.MovieC
 		actorSQL := `INSERT INTO movies_actor (id_movie, id_actor) VALUES ($1, $2)`
 		if _, err := tx.Exec(rctx, actorSQL, newMovie.Id, actorID); err != nil {
 			log.Println("Failed to insert actor relation:", err)
-			return models.MovieCreate{}, err
+			return models.MovieBody{}, err
 		}
 	}
 
@@ -327,7 +401,7 @@ func (mr *MoviesRepository) CreateMovie(rctx context.Context, body models.MovieC
 		genreSQL := `INSERT INTO movies_genre (id_movies, id_genre) VALUES ($1, $2)`
 		if _, err := tx.Exec(rctx, genreSQL, newMovie.Id, genreID); err != nil {
 			log.Println("Failed to insert genre relation:", err)
-			return models.MovieCreate{}, err
+			return models.MovieBody{}, err
 		}
 
 	}
@@ -335,7 +409,7 @@ func (mr *MoviesRepository) CreateMovie(rctx context.Context, body models.MovieC
 	// Commit transaksi
 	if err := tx.Commit(rctx); err != nil {
 		log.Println("Failed to commit transaction:", err)
-		return models.MovieCreate{}, err
+		return models.MovieBody{}, err
 	}
 
 	return newMovie, nil
