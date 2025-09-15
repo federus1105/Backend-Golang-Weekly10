@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/federus1105/weekly/internals/models"
@@ -163,44 +164,6 @@ LIMIT $1 OFFSET $2
 	return movies, nil
 }
 
-func (mr *MoviesRepository) GetFilterMovie(rctx context.Context, title string, genre string, limit, offset int) ([]models.Movie, error) {
-	sql := `
-    SELECT
-        m.id,
-        m.title,
-        m.image,
-        STRING_AGG(g.name, ', ') AS genres
-    FROM movies m
-    JOIN movies_genre mg ON m.id = mg.id_movies
-    JOIN genres g ON mg.id_genre = g.id
-    WHERE 
-        LOWER(m.title) ILIKE LOWER($1)
-        AND LOWER(g.name) = LOWER($2)
-    GROUP BY m.id, m.image, m.title
-    ORDER BY m.title ASC
-    LIMIT $3 OFFSET $4
-    `
-	titlePattern := "%" + title + "%"
-
-	rows, err := mr.db.Query(rctx, sql, titlePattern, genre, limit, offset)
-	if err != nil {
-		log.Println("Internal Server Error: ", err.Error())
-		return nil, err
-	}
-	defer rows.Close()
-
-	var movies []models.Movie
-	for rows.Next() {
-		var movie models.Movie
-		if err := rows.Scan(&movie.Id, &movie.Title, &movie.Image, &movie.Genres); err != nil {
-			log.Println("Internal Server Error: ", err.Error())
-			return nil, err
-		}
-		movies = append(movies, movie)
-	}
-	return movies, nil
-}
-
 func (mr *MoviesRepository) GetDetailMovie(rctx context.Context, movieID int) ([]models.Movie, error) {
 	sql := `SELECT 
   m.id,
@@ -245,56 +208,78 @@ GROUP BY
 	return movies, nil
 }
 
-func (mr *MoviesRepository) GetAllMovie(rctx context.Context, limit, offset int) ([]models.Movie, error) {
+func (mr *MoviesRepository) GetAllOrFilteredMovies(rctx context.Context, title string, genre string, limit, offset int) ([]models.Movie, error) {
 	start := time.Now()
-	redisKey := "firdaus:allmovies"
-	if offset == 0 {
-		cmd := mr.rdb.Get(rctx, redisKey)
-		if cmd.Err() != nil {
-			if cmd.Err() == redis.Nil {
-				log.Printf("Key %s does not exist\n", redisKey)
-			} else {
-				log.Println("Redis Error. \nCause: ", cmd.Err().Error())
-			}
-		} else {
-			// cache hit
-			var cachedSchedules []models.Movie
-			cmdByte, err := cmd.Bytes()
-			if err != nil {
-				log.Println("Internal server error.\nCause: ", err.Error())
-			} else {
-				if err := json.Unmarshal(cmdByte, &cachedSchedules); err != nil {
-					log.Println("Internal Server Error. \nCause: ", err.Error())
-				}
-			}
-			if len(cachedSchedules) > 0 {
-				log.Printf("Key %s found in cache ✅", redisKey)
-				log.Printf("Served in %s using Redis", time.Since(start))
-				return cachedSchedules, nil
+	isFiltering := title != "" || genre != ""
 
+	// Redis cache hanya digunakan jika tidak ada filter dan offset == 0
+	redisKey := "firdaus:allmovies"
+	if !isFiltering && offset == 0 {
+		cmd := mr.rdb.Get(rctx, redisKey)
+		if cmd.Err() == nil {
+			// Cache hit
+			var cachedMovies []models.Movie
+			cmdBytes, err := cmd.Bytes()
+			if err == nil {
+				if err := json.Unmarshal(cmdBytes, &cachedMovies); err == nil {
+					log.Printf("Key %s found in cache ✅", redisKey)
+					log.Printf("Served in %s using Redis", time.Since(start))
+					return cachedMovies, nil
+				}
 			}
 		}
 	}
-	sql := `SELECT
-  m.id,
-  m.title,
-  m.image,
-  STRING_AGG(g.name, ', ') AS genres
+
+	// Build dynamic SQL and parameters
+	baseSQL := `
+	SELECT
+    m.id,
+    m.title,
+    m.image,
+    STRING_AGG(g.name, ', ') AS genres
 FROM movies m
-JOIN director d ON m.id_director = d.id
 LEFT JOIN movies_genre mg ON m.id = mg.id_movies
 LEFT JOIN genres g ON mg.id_genre = g.id
-WHERE is_deleted = FALSE
-GROUP BY m.id, d.name
-ORDER BY m.title ASC
-LIMIT $1 OFFSET $2`
+WHERE m.is_deleted = FALSE
+	`
 
-	rows, err := mr.db.Query(rctx, sql, limit, offset)
+	// Dynamic conditions
+	var conditions []string
+	var args []interface{}
+	argIdx := 1
+
+	if title != "" {
+		conditions = append(conditions, fmt.Sprintf("LOWER(m.title) ILIKE LOWER($%d)", argIdx))
+		args = append(args, "%"+title+"%")
+		argIdx++
+	}
+
+	if genre != "" {
+		conditions = append(conditions, fmt.Sprintf("LOWER(g.name) = LOWER($%d)", argIdx))
+		args = append(args, genre)
+		argIdx++
+	}
+
+	if len(conditions) > 0 {
+		baseSQL += " AND " + strings.Join(conditions, " AND ")
+	}
+
+	baseSQL += `
+		GROUP BY m.id, m.title, m.image
+		ORDER BY m.title ASC
+		LIMIT $%d OFFSET $%d
+	`
+	baseSQL = fmt.Sprintf(baseSQL, argIdx, argIdx+1)
+	args = append(args, limit, offset)
+
+	// Execute query
+	rows, err := mr.db.Query(rctx, baseSQL, args...)
 	if err != nil {
 		log.Println("Internal Server Error: ", err.Error())
 		return nil, err
 	}
 	defer rows.Close()
+
 	var movies []models.Movie
 	for rows.Next() {
 		var movie models.Movie
@@ -304,17 +289,24 @@ LIMIT $1 OFFSET $2`
 		}
 		movies = append(movies, movie)
 	}
-	// renew cache
-	if offset == 0 {
+
+	// Save to Redis if no filter and offset == 0 (only cache all movie list)
+	if !isFiltering && offset == 0 {
 		bt, err := json.Marshal(movies)
-		if err != nil {
-			log.Println("Internal Server Error.\n Cause: ", err.Error())
-		}
-		if err := mr.rdb.Set(rctx, redisKey, string(bt), 1*time.Minute).Err(); err != nil {
-			log.Println("Redis Error. \nCause: ", err.Error())
+		if err == nil {
+			if err := mr.rdb.Set(rctx, redisKey, string(bt), 1*time.Minute).Err(); err != nil {
+				log.Println("Redis Set Error:", err.Error())
+			}
 		}
 	}
-	log.Printf("[REDIS TIMING] Served in %s using DB (cache miss)", time.Since(start))
+
+	log.Printf("[MOVIES] Served in %s using %s", time.Since(start), func() string {
+		if !isFiltering && offset == 0 {
+			return "Redis or DB (cached)"
+		}
+		return "DB (filtered)"
+	}())
+
 	return movies, nil
 }
 
@@ -370,7 +362,6 @@ func (mr *MoviesRepository) CreateMovie(rctx context.Context, body models.MovieB
 		RETURNING id, title, release_date, duration, synopsis, id_director, rating, image, backdrop`
 	values := []any{body.Title, body.ReleaseDate, body.Duration, body.Synopsis, body.Director, body.Rating, body.Image,
 		body.Backdrop}
-
 	var newMovie models.MovieBody
 	if err := tx.QueryRow(rctx, sql, values...).Scan(
 		&newMovie.Id,
