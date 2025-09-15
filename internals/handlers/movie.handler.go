@@ -4,15 +4,13 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"path/filepath"
 	"strconv"
-	"time"
 
 	"github.com/federus1105/weekly/internals/models"
 	"github.com/federus1105/weekly/internals/repositories"
+	"github.com/federus1105/weekly/internals/utils"
 	"github.com/federus1105/weekly/pkg"
 	"github.com/gin-gonic/gin"
-	"github.com/gin-gonic/gin/binding"
 )
 
 type movieHandler struct {
@@ -280,18 +278,27 @@ func (mh *movieHandler) EditMovie(ctx *gin.Context) {
 
 	fmt.Println(user)
 	// Upload gambar
-	file := body.Image
-	ext := filepath.Ext(file.Filename)
-	filename := fmt.Sprintf("%d_images_%d%s", time.Now().UnixNano(), user.UserId, ext)
-	location := filepath.Join("public", filename)
+	var filename string
+	if body.Image != nil {
+		savePath, generatedFilename, err := utils.UploadImageFile(ctx, body.Image, "public", fmt.Sprintf("user_%d", user.UserId))
+		if err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"error":   err.Error(),
+			})
+			return
+		}
 
-	if err := ctx.SaveUploadedFile(file, location); err != nil {
-		log.Println("Gagal upload gambar.\nSebab:", err.Error())
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Gagal upload gambar",
-		})
-		return
+		if err := ctx.SaveUploadedFile(body.Image, savePath); err != nil {
+			log.Println("Gagal menyimpan file.\nSebab:", err.Error())
+			ctx.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"error":   "Gagal menyimpan file gambar",
+			})
+			return
+		}
+
+		filename = generatedFilename
 	}
 
 	// Simpan ke database
@@ -346,7 +353,7 @@ func (mh *movieHandler) CreateMovie(ctx *gin.Context) {
 	fmt.Println("release_date raw:", ctx.PostForm("release_date"))
 
 	// Ambil form data
-	if err := ctx.ShouldBindWith(&body, binding.FormMultipart); err != nil {
+	if err := ctx.ShouldBind(&body); err != nil {
 		log.Println("Gagal bind data:", err)
 		ctx.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
@@ -376,45 +383,67 @@ func (mh *movieHandler) CreateMovie(ctx *gin.Context) {
 	}
 
 	// Upload Poster (Image)
-	file := body.Image
-	if file != nil {
-		ext := filepath.Ext(file.Filename)
-		filename := fmt.Sprintf("%d_image_%d%s", time.Now().UnixNano(), user.UserId, ext)
-		path := filepath.Join("public", filename)
-
-		if err := ctx.SaveUploadedFile(file, path); err != nil {
-			log.Println("Gagal upload poster:", err)
+	if body.Image != nil {
+		savePath, filename, err := utils.UploadImageFile(ctx, body.Image, "public", fmt.Sprintf("poster_path%d", user.UserId))
+		if err != nil {
+			log.Println("Upload poster gagal:", err)
 			ctx.JSON(http.StatusBadRequest, gin.H{
 				"success": false,
-				"error":   "Gagal upload poster",
+				"error":   err.Error(),
 			})
 			return
 		}
-
+		if err := ctx.SaveUploadedFile(body.Image, savePath); err != nil {
+			log.Println("Gagal menyimpan file.\nSebab:", err.Error())
+			ctx.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"error":   "Gagal menyimpan file gambar",
+			})
+			return
+		}
 		body.PosterPath = filename
 	}
 
 	// Upload Backdrop
-	backdrop := body.Backdrop
-	if backdrop != nil {
-		ext := filepath.Ext(backdrop.Filename)
-		filename := fmt.Sprintf("%d_backdrop_%d%s", time.Now().UnixNano(), user.UserId, ext)
-		path := filepath.Join("public", filename)
-
-		if err := ctx.SaveUploadedFile(backdrop, path); err != nil {
-			log.Println("Gagal upload backdrop:", err)
+	if body.Backdrop != nil {
+		savePath, filename, err := utils.UploadImageFile(ctx, body.Backdrop, "public", fmt.Sprintf("backdrop_path%d", user.UserId))
+		if err != nil {
+			log.Println("Upload backdrop gagal:", err)
 			ctx.JSON(http.StatusBadRequest, gin.H{
 				"success": false,
-				"error":   "Gagal upload backdrop",
+				"error":   err.Error(),
+			})
+			return
+		}
+		if err := ctx.SaveUploadedFile(body.Backdrop, savePath); err != nil {
+			log.Println("Gagal menyimpan file.\nSebab:", err.Error())
+			ctx.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"error":   "Gagal menyimpan file gambar",
 			})
 			return
 		}
 
 		body.BackdropPath = filename
 	}
+	fmt.Println("Image:", body.Image)
+	fmt.Println("Backdrop:", body.Backdrop)
 
 	// Simpan ke database
-	movie, err := mh.mr.CreateMovie(ctx.Request.Context(), body)
+	movieEntity := models.MovieBody{
+		Title:        body.Title,
+		ReleaseDate:  body.ReleaseDate,
+		Duration:     body.Duration,
+		Synopsis:     body.Synopsis,
+		Director:     body.Director,
+		ActorIDs:     body.ActorIDs,
+		GenreIDs:     body.GenreIDs,
+		Rating:       body.Rating,
+		PosterPath:   body.PosterPath,
+		BackdropPath: body.BackdropPath,
+	}
+
+	movie, err := mh.mr.CreateMovie(ctx.Request.Context(), movieEntity)
 	if err != nil {
 		log.Println("Gagal simpan movie:", err)
 		ctx.JSON(http.StatusInternalServerError, gin.H{
