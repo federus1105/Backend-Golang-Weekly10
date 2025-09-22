@@ -486,8 +486,8 @@ func (mr *MoviesRepository) CreateMovie(rctx context.Context, body models.MovieB
 	sql := `INSERT INTO movies (title, release_date, duration, synopsis, id_director, rating, image, backdrop)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		RETURNING id, title, release_date, duration, synopsis, id_director, rating, image, backdrop`
-	values := []any{body.Title, body.ReleaseDate, body.Duration, body.Synopsis, body.Director, body.Rating, body.Image,
-		body.Backdrop}
+	values := []any{body.Title, body.ReleaseDate, body.Duration, body.Synopsis, body.Director, body.Rating,
+		body.Imagestr, body.Backdropstr}
 	var newMovie models.MovieBody
 	if err := tx.QueryRow(rctx, sql, values...).Scan(
 		&newMovie.Id,
@@ -497,8 +497,8 @@ func (mr *MoviesRepository) CreateMovie(rctx context.Context, body models.MovieB
 		&newMovie.Synopsis,
 		&newMovie.Director,
 		&newMovie.Rating,
-		&newMovie.Image,
-		&newMovie.Backdrop,
+		&newMovie.Imagestr,
+		&newMovie.Backdropstr,
 	); err != nil {
 		log.Println("Failed to insert movie:", err)
 		return models.MovieBody{}, err
