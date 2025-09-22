@@ -117,3 +117,16 @@ ORDER BY s.date ASC`
 // 	log.Printf("[REDIS TIMING] Served in %s using DB (cache miss)", time.Since(start))
 // 	return schedules, nil
 // }
+
+// func (sr *ScheduleRepository) GetGenre(rctx context.Context) []models.Movie {
+
+// 	sql := fmt.Sprintf(`
+//     SELECT m.id, m.title
+//     FROM movies m
+//     JOIN movies_genre mg ON m.id = mg.id_movie
+//     WHERE mg.id_genre IN (%s)
+//     GROUP BY m.id
+//     HAVING COUNT(DISTINCT mg.id_genre) = %d
+// `, strings.Join(placeholders, ", "), len(id_genre))
+
+// }

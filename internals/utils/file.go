@@ -1,21 +1,42 @@
 package utils
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"mime/multipart"
 	"path/filepath"
+	"strings"
 	"time"
-
-	"github.com/gin-gonic/gin"
 )
 
-func SaveUploadedImage(ctx *gin.Context, file *multipart.FileHeader, prefix string, userID int) (string, error) {
-	ext := filepath.Ext(file.Filename)
-	filename := fmt.Sprintf("%s_%d_%d%s", prefix, time.Now().UnixNano(), userID, ext)
-	location := filepath.Join("public", filename)
+// maksimal ukuran file
+const MaxFileSize = 500 * 1024
 
-	if err := ctx.SaveUploadedFile(file, location); err != nil {
-		return "", err
-	}
-	return filename, nil
+// tipe file yang di perbolehkan
+var allowedExtensions = map[string]bool{
+	".jpg":  true,
+	".jpeg": true,
+	".png":  true,
 }
+
+func UploadImageFile(ctx context.Context, file *multipart.FileHeader, uploadDir string, prefix string) (string, string, error) {
+	if file == nil {
+		return "", "", errors.New("file tidak ditemukan")
+	}
+
+	ext := strings.ToLower(filepath.Ext(file.Filename))
+	if !allowedExtensions[ext] {
+		return "", "", errors.New("format file tidak didukung (hanya jpg, jpeg, png)")
+	}
+
+	if file.Size > MaxFileSize {
+		return "", "", errors.New("ukuran file maksimal 500 kb")
+	}
+
+	filename := fmt.Sprintf("%d_%s%s", time.Now().UnixNano(), prefix, ext)
+	savePath := filepath.Join(uploadDir, filename)
+
+	return savePath, filename, nil
+}
+

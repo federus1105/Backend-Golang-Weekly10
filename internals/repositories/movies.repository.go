@@ -3,12 +3,14 @@ package repositories
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
 	"time"
 
 	"github.com/federus1105/weekly/internals/models"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 )
@@ -55,7 +57,7 @@ func (mr *MoviesRepository) GetUpcomingMovies(rctx context.Context, limit, offse
     m.image,
     m.title,
     m.release_date,
-    STRING_AGG(g.name, ', ') AS genres
+    ARRAY_AGG(g.name) AS genres
 FROM movies m
 JOIN movies_genre mg ON m.id = mg.id_movies
 JOIN genres g ON mg.id_genre = g.id
@@ -126,7 +128,7 @@ SELECT
   m.id,
   m.image,
   m.title,
-  STRING_AGG(g.name, ', ') AS genres
+  ARRAY_AGG(g.name, ', ') AS genres
 FROM movies m
 JOIN movies_genre mg ON m.id = mg.id_movies
 JOIN genres g ON mg.id_genre = g.id
@@ -166,32 +168,33 @@ LIMIT $1 OFFSET $2
 
 func (mr *MoviesRepository) GetDetailMovie(rctx context.Context, movieID int) ([]models.Movie, error) {
 	sql := `SELECT 
-  m.id,
-  m.image,
-  m.backdrop,
-  m.title,
-  m.release_date,
-  m.duration,
-  STRING_AGG(DISTINCT d.name, ', ') AS director,
-  m.synopsis,
-  STRING_AGG(DISTINCT g.name, ', ') AS genres,
-  STRING_AGG(DISTINCT a.name, ', ') AS actor
-FROM movies m
-JOIN movies_genre mg ON m.id = mg.id_movies
-JOIN genres g ON mg.id_genre = g.id
-JOIN movies_actor ma ON m.id = ma.id_movie
-JOIN actor a ON ma.id_actor = a.id
-JOIN director d ON m.id_director = d.id
-WHERE m.id = $1
-GROUP BY 
-  m.id, 
-  m.image, 
-  m.backdrop, 
-  m.title, 
-  m.release_date, 
-  m.duration, 
-  m.synopsis;`
-
+	m.id,
+	m.image,
+	m.backdrop,
+	m.title,
+	m.release_date,
+	m.duration,
+	STRING_AGG(DISTINCT d.name, ', ') AS director,
+	m.synopsis,
+	ARRAY_AGG(DISTINCT g.name) AS genres,
+	ARRAY_AGG(DISTINCT a.name) AS actor
+	FROM movies m
+	JOIN movies_genre mg ON m.id = mg.id_movies
+	JOIN genres g ON mg.id_genre = g.id
+	JOIN movies_actor ma ON m.id = ma.id_movie
+	JOIN actor a ON ma.id_actor = a.id
+	JOIN director d ON m.id_director = d.id
+	WHERE m.id = $1
+	AND m.is_deleted = false
+	GROUP BY 
+	m.id, 
+	m.image, 
+	m.backdrop, 
+	m.title, 
+	m.release_date, 
+	m.duration, 
+	m.synopsis
+	`
 	rows, err := mr.db.Query(rctx, sql, movieID)
 	if err != nil {
 		return nil, err
@@ -201,6 +204,7 @@ GROUP BY
 	for rows.Next() {
 		var movie models.Movie
 		if err := rows.Scan(&movie.Id, &movie.Image, &movie.Backdrop, &movie.Title, &movie.ReleaseDate, &movie.Duration, &movie.Director, &movie.Synopsis, &movie.Genres, &movie.Actor); err != nil {
+			log.Println("Error saat scan rows:", err)
 			return nil, err
 		}
 		movies = append(movies, movie)
@@ -208,11 +212,11 @@ GROUP BY
 	return movies, nil
 }
 
-func (mr *MoviesRepository) GetAllOrFilteredMovies(rctx context.Context, title string, genre string, limit, offset int) ([]models.Movie, error) {
+func (mr *MoviesRepository) GetAllOrFilteredMovies(rctx context.Context, title string, genre []string, limit, offset int) ([]models.Movie, error) {
 	start := time.Now()
-	isFiltering := title != "" || genre != ""
+	isFiltering := title != "" || len(genre) > 0
 
-	// Redis cache hanya digunakan jika tidak ada filter dan offset == 0
+	// Redis cache hanya tanpa filter dan pagination
 	redisKey := "firdaus:allmovies"
 	if !isFiltering && offset == 0 {
 		cmd := mr.rdb.Get(rctx, redisKey)
@@ -230,33 +234,25 @@ func (mr *MoviesRepository) GetAllOrFilteredMovies(rctx context.Context, title s
 		}
 	}
 
-	// Build dynamic SQL and parameters
 	baseSQL := `
 	SELECT
     m.id,
     m.title,
     m.image,
-    STRING_AGG(g.name, ', ') AS genres
+    COALESCE(ARRAY_AGG(DISTINCT g.name) FILTER (WHERE g.name IS NOT NULL)) AS genres
 FROM movies m
-LEFT JOIN movies_genre mg ON m.id = mg.id_movies
-LEFT JOIN genres g ON mg.id_genre = g.id
-WHERE m.is_deleted = FALSE
-	`
+INNER JOIN movies_genre mg ON m.id = mg.id_movies
+INNER JOIN genres g ON mg.id_genre = g.id`
 
 	// Dynamic conditions
 	var conditions []string
 	var args []interface{}
 	argIdx := 1
 
+	// filter title
 	if title != "" {
 		conditions = append(conditions, fmt.Sprintf("LOWER(m.title) ILIKE LOWER($%d)", argIdx))
 		args = append(args, "%"+title+"%")
-		argIdx++
-	}
-
-	if genre != "" {
-		conditions = append(conditions, fmt.Sprintf("LOWER(g.name) = LOWER($%d)", argIdx))
-		args = append(args, genre)
 		argIdx++
 	}
 
@@ -264,15 +260,36 @@ WHERE m.is_deleted = FALSE
 		baseSQL += " AND " + strings.Join(conditions, " AND ")
 	}
 
-	baseSQL += `
-		GROUP BY m.id, m.title, m.image
-		ORDER BY m.title ASC
-		LIMIT $%d OFFSET $%d
+	// Tambahkan join dengan unnest genre jika ada
+	if len(genre) > 0 {
+		baseSQL += `
+	LEFT JOIN (
+		SELECT unnest($` + fmt.Sprint(argIdx) + `::text[]) AS genre_name
+	) AS selected_genres ON LOWER(g.name) = LOWER(selected_genres.genre_name)
 	`
-	baseSQL = fmt.Sprintf(baseSQL, argIdx, argIdx+1)
+		args = append(args, genre)
+		argIdx++
+	}
+	// Akhir query
+	baseSQL += `
+GROUP BY m.id, m.title, m.image`
+
+	if len(genre) > 0 {
+		baseSQL += fmt.Sprintf(`
+HAVING COUNT(DISTINCT selected_genres.genre_name) = $%d
+`, argIdx)
+		args = append(args, len(genre))
+		argIdx++
+	}
+
+	// Order, limit, offset
+	baseSQL += fmt.Sprintf(`
+ORDER BY m.title ASC
+LIMIT $%d OFFSET $%d
+`, argIdx, argIdx+1)
 	args = append(args, limit, offset)
 
-	// Execute query
+	// Query
 	rows, err := mr.db.Query(rctx, baseSQL, args...)
 	if err != nil {
 		log.Println("Internal Server Error: ", err.Error())
@@ -290,7 +307,7 @@ WHERE m.is_deleted = FALSE
 		movies = append(movies, movie)
 	}
 
-	// Save to Redis if no filter and offset == 0 (only cache all movie list)
+	// Cache jika tidak filter
 	if !isFiltering && offset == 0 {
 		bt, err := json.Marshal(movies)
 		if err == nil {
@@ -336,15 +353,124 @@ func (mr *MoviesRepository) DeleteMovie(ctx context.Context, id int) error {
 	return nil
 }
 
-func (mr *MoviesRepository) EditMovie(rctx context.Context, Image, Title, Duration, Synopsis string, id int) (models.Movie, error) {
-	sql := `UPDATE movies SET image=$1, title=$2, duration=$3, synopsis=$4 WHERE id=$5 RETURNING id, image, title, duration, synopsis`
-	values := []any{Image, Title, Duration, Synopsis, id}
-	var movie models.Movie
-	err := mr.db.QueryRow(rctx, sql, values...).Scan(&movie.Id, &movie.Image, &movie.Title, &movie.Duration, &movie.Synopsis)
+func (r *MoviesRepository) EditMovie(ctx context.Context, body models.MovieBody, image *string,
+	backdrop *string) (models.Movie, error) {
+	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
-		log.Println("Internal server error.\nCause: ", err.Error())
 		return models.Movie{}, err
 	}
+
+	defer tx.Rollback(ctx)
+
+	setClauses := []string{}
+	args := []any{}
+	argID := 1
+
+	if body.Image != nil {
+		// Simpan file dan dapatkan pathnya dulu di layer service/controller
+		setClauses = append(setClauses, fmt.Sprintf("image = $%d", argID))
+		args = append(args, *image)
+		argID++
+	}
+	if body.Backdrop != nil {
+		setClauses = append(setClauses, fmt.Sprintf("backdrop = $%d", argID))
+		args = append(args, *backdrop)
+		argID++
+	}
+	if body.Title != "" {
+		setClauses = append(setClauses, fmt.Sprintf("title = $%d", argID))
+		args = append(args, body.Title)
+		argID++
+	}
+	if !body.ReleaseDate.IsZero() {
+		setClauses = append(setClauses, fmt.Sprintf("release_date = $%d", argID))
+		args = append(args, body.ReleaseDate)
+		argID++
+	}
+	if body.Duration != "" {
+		setClauses = append(setClauses, fmt.Sprintf("duration = $%d", argID))
+		args = append(args, body.Duration)
+		argID++
+	}
+	if body.Director != 0 {
+		setClauses = append(setClauses, fmt.Sprintf("id_director = $%d", argID))
+		args = append(args, body.Director)
+		argID++
+	}
+	if body.Synopsis != "" {
+		setClauses = append(setClauses, fmt.Sprintf("synopsis = $%d", argID))
+		args = append(args, body.Synopsis)
+		argID++
+	}
+	if body.Rating != 0 {
+		setClauses = append(setClauses, fmt.Sprintf("rating = $%d", argID))
+		args = append(args, body.Rating)
+		argID++
+	}
+
+	if len(setClauses) == 0 {
+		return models.Movie{}, fmt.Errorf("no fields to update")
+	}
+
+	query := fmt.Sprintf(`
+        UPDATE movies
+        SET %s
+        WHERE id = $%d
+        RETURNING id, image, backdrop, title, release_date, duration, id_director, synopsis, rating
+    `, strings.Join(setClauses, ", "), argID)
+
+	args = append(args, body.Id)
+
+	var movie models.Movie
+	err = tx.QueryRow(ctx, query, args...).Scan(
+		&movie.Id,
+		&movie.Image,
+		&movie.Backdrop,
+		&movie.Title,
+		&movie.ReleaseDate,
+		&movie.Duration,
+		&movie.Director,
+		&movie.Synopsis,
+		&movie.Rating,
+	)
+	if err != nil {
+		tx.Rollback(ctx)
+		return models.Movie{}, err
+	}
+
+	// Update movies_actor relasi
+	// _, err = tx.Exec(ctx, "DELETE FROM movies_actor WHERE id_movie = $1", body.Id)
+	// if err != nil {
+	// 	tx.Rollback(ctx)
+	// 	return models.Movie{}, err
+	// }
+	for _, actorID := range body.ActorIDs {
+		_, err = tx.Exec(ctx, "INSERT INTO movies_actor (id_movie, id_actor) VALUES ($1, $2)", body.Id, actorID)
+		if err != nil {
+			tx.Rollback(ctx)
+			return models.Movie{}, err
+		}
+	}
+
+	// Update movies_genre relasi
+	// _, err = tx.Exec(ctx, "DELETE FROM movies_genre WHERE id_movies = $1", body.Id)
+	// if err != nil {
+	// 	tx.Rollback(ctx)
+	// 	return models.Movie{}, err
+	// }
+	for _, genreID := range body.GenreIDs {
+		_, err = tx.Exec(ctx, "INSERT INTO movies_genre (id_movies, id_genre) VALUES ($1, $2)", body.Id, genreID)
+		if err != nil {
+			tx.Rollback(ctx)
+			return models.Movie{}, err
+		}
+	}
+
+	err = tx.Commit(ctx)
+	if err != nil {
+		return models.Movie{}, err
+	}
+
 	return movie, nil
 }
 
@@ -404,4 +530,107 @@ func (mr *MoviesRepository) CreateMovie(rctx context.Context, body models.MovieB
 	}
 
 	return newMovie, nil
+}
+
+func (mr *MoviesRepository) GetMovieAdmin(rctx context.Context, limit, offset int) ([]models.MovieAdmin, error) {
+	sql := `SELECT 
+		m.id,
+		m.image,
+		m.title,
+		m.release_date,
+		m.duration,
+		STRING_AGG(DISTINCT g.name, ', ') AS genres
+		FROM movies m
+		JOIN movies_genre mg ON m.id = mg.id_movies
+		JOIN genres g ON mg.id_genre = g.id
+		WHERE m.is_deleted = false
+		GROUP BY 
+			m.id, 
+			m.image, 
+			m.title, 
+			m.release_date, 
+			m.duration
+		ORDER BY m.id
+		LIMIT $1 OFFSET $2;`
+	rows, err := mr.db.Query(rctx, sql, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var movies []models.MovieAdmin
+	for rows.Next() {
+		var movie models.MovieAdmin
+		if err := rows.Scan(&movie.Id, &movie.Image, &movie.Title, &movie.ReleaseDate, &movie.Duration, &movie.Genres); err != nil {
+			log.Println("Error saat scan rows", err)
+			return nil, err
+		}
+		movies = append(movies, movie)
+	}
+	return movies, nil
+}
+
+func (sr *MoviesRepository) GetMoviesByAllGenres(ctx context.Context, genreIDs []string) ([]models.Movie, error) {
+	if len(genreIDs) == 0 {
+		return nil, errors.New("genreIDs is empty")
+	}
+	placeholders := make([]string, len(genreIDs))
+	args := make([]interface{}, len(genreIDs))
+	for i, id := range genreIDs {
+		placeholders[i] = fmt.Sprintf("$%d", i+1)
+		args[i] = id
+	}
+	query := fmt.Sprintf(`
+    SELECT 
+    m.id,
+    m.title,
+    ARRAY_AGG(DISTINCT g.name) AS genres
+FROM 
+    movies m
+JOIN 
+    movies_genre mg ON m.id = mg.id_movies
+JOIN 
+    genres g ON g.id = mg.id_genre
+WHERE 
+    mg.id_genre IN (%s)
+GROUP BY 
+    m.id
+HAVING 
+    COUNT(DISTINCT mg.id_genre) = %d;
+    `, strings.Join(placeholders, ", "), len(genreIDs))
+
+	rows, err := sr.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var movies []models.Movie
+
+	for rows.Next() {
+		var movie models.Movie
+		if err := rows.Scan(&movie.Id, &movie.Title, &movie.Genres); err != nil {
+			return nil, err
+		}
+		movies = append(movies, movie)
+	}
+	return movies, nil
+}
+
+func (r *MoviesRepository) GetAllGenres(ctx context.Context) ([]models.Genre, error) {
+	rows, err := r.db.Query(ctx, "SELECT id, name FROM genres")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var genres []models.Genre
+	for rows.Next() {
+		var g models.Genre
+		if err := rows.Scan(&g.ID, &g.Name); err != nil {
+			return nil, err
+		}
+		genres = append(genres, g)
+	}
+
+	return genres, nil
 }

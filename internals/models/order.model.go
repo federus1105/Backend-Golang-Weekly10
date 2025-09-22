@@ -2,13 +2,13 @@ package models
 
 type Order struct {
 	Id       int     `json:"id,omitempty"`
-	Schedule int     `json:"schedule" binding:"required"`
+	Schedule int     `json:"schedule" binding:"required,numeric"`
 	User     int     `json:"user,omitempty"`
 	Payment  int     `json:"payment" binding:"required"`
 	Total    float32 `json:"total,omitempty"`
 	Fullname string  `json:"fullname" binding:"required"`
 	Email    string  `json:"email" binding:"required,email"`
-	Phone    string  `json:"phone" binding:"required"`
+	Phone    string  `json:"phone" binding:"required,min=12,numeric"`
 	Paid     bool    `json:"paid" binding:"required"`
 	Seats    []int   `json:"seats" binding:"required"`
 }

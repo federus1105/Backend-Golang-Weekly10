@@ -39,12 +39,13 @@ func (or *OrderRepository) CreateOrder(
 		log.Println("Failed to start transaction:", err)
 		return
 	}
+	defer tx.Rollback(rctx)
 
-	defer func() {
-		if err != nil {
-			_ = tx.Rollback(rctx)
-		}
-	}()
+	// defer func() {
+	// 	if err != nil {
+	// 		_ = tx.Rollback(rctx)
+	// 	}
+	// }()
 
 	// ✅ Ambil harga cinema berdasarkan schedule
 	var price int
@@ -59,6 +60,7 @@ func (or *OrderRepository) CreateOrder(
 		log.Println("Failed to get cinema price:", err)
 		return
 	}
+	
 
 	// ✅ Hitung total otomatis
 	body.Total = float32(price * len(seatIDs))
@@ -83,22 +85,6 @@ func (or *OrderRepository) CreateOrder(
 		return
 	}
 
-	// Step 2: Insert kursi
-	// for _, seatID := range seatIDs {
-	// 	// Insert ke order_seat
-	// 	sqlSeat := `INSERT INTO order_seat (id_order, id_seats) VALUES ($1, $2);`
-	// 	if _, err = tx.Exec(rctx, sqlSeat, newOrder.Id, seatID); err != nil {
-	// 		log.Println("Failed to insert order_seat:", err)
-	// 		return
-	// 	}
-
-	// 	// Update status kursi
-	// 	sqlUpdate := `UPDATE seats SET isstatus = false WHERE id = $1;`
-	// 	if _, err = tx.Exec(rctx, sqlUpdate, seatID); err != nil {
-	// 		log.Println("Failed to update seat status:", err)
-	// 		return
-	// 	}
-	// }
 	for _, seatID := range seatIDs {
 		// Validasi kursi belum diambil
 		var isAvailable bool
@@ -128,12 +114,6 @@ func (or *OrderRepository) CreateOrder(
 			log.Println("Failed to update seat status:", err)
 			return
 		}
-	}
-
-	// Commit
-	if err = tx.Commit(rctx); err != nil {
-		log.Println("Failed to commit transaction:", err)
-		return
 	}
 
 	// Commit

@@ -5,19 +5,23 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/federus1105/weekly/internals/models"
 	"github.com/federus1105/weekly/internals/repositories"
+	"github.com/federus1105/weekly/internals/utils"
 	"github.com/federus1105/weekly/pkg"
 	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
 )
 
 type AuthHandler struct {
-	ar *repositories.AuthRepository
+	ar          *repositories.AuthRepository
+	redisClient *redis.Client
 }
 
-func NewAuthHandler(ar *repositories.AuthRepository) *AuthHandler {
-	return &AuthHandler{ar: ar}
+func NewAuthHandler(ar *repositories.AuthRepository, rdb *redis.Client) *AuthHandler {
+	return &AuthHandler{ar: ar, redisClient: rdb}
 }
 
 // Login godoc
@@ -143,26 +147,27 @@ func (a *AuthHandler) Register(ctx *gin.Context) {
 	})
 }
 
-func (h *AuthHandler) ResetPassword(c *gin.Context) {
+func (a *AuthHandler) ResetPassword(c *gin.Context) {
 	var body models.ChangePassword
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
+	// mengambil user yang lagi login sekarang
 	userIDInterface, exists := c.Get("user_id")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
 
-	userID, ok := userIDInterface.(int) // pastikan tipe sesuai
+	userID, ok := userIDInterface.(int)
 	if !ok {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal error"})
 		return
 	}
 
-	err := h.ar.ResetPassword(c.Request.Context(), userID, body.OldPassword, body.NewPassword)
+	err := a.ar.ResetPassword(c.Request.Context(), userID, body.OldPassword, body.NewPassword)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -171,10 +176,33 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Password berhasil direset"})
 }
 
-func (h *AuthHandler) Logout(c *gin.Context) {
-	// Hanya memberitahu user untuk hapus token dari client
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "Logout berhasil. Silakan hapus token di sisi client.",
-	})
+func (a *AuthHandler) Logout(ctx *gin.Context) {
+	token := utils.GetTokenFromHeader(ctx)
+	if token == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Token tidak ditemukan"})
+		return
+	}
+
+	expiry := utils.GetTokenExpiry(token)
+	if expiry.IsZero() {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"error": "Token tidak valid atau tidak memiliki expiry"})
+		return
+	}
+
+	duration := time.Until(expiry)
+	if duration <= 0 {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"error": "Token sudah kedaluwarsa"})
+		return
+	}
+
+	// Simpan token ke Redis blacklist dengan TTL sesuai sisa masa berlaku token
+	err := a.redisClient.Set(ctx, "blacklist:"+token, true, duration).Err()
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal logout"})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{"message": "Berhasil logout"})
 }

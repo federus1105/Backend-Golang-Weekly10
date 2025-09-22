@@ -2,15 +2,11 @@ package handlers
 
 import (
 	"fmt"
-	"log"
 	"net/http"
-	"path/filepath"
-	"strconv"
-	"time"
 
 	"github.com/federus1105/weekly/internals/models"
 	"github.com/federus1105/weekly/internals/repositories"
-	"github.com/federus1105/weekly/pkg"
+	"github.com/federus1105/weekly/internals/utils"
 	"github.com/gin-gonic/gin"
 )
 
@@ -31,16 +27,25 @@ func NewProfileHandler(pr *repositories.ProfileRepository) *ProfileHandler {
 // @Security BearerAuth
 // @Router /profile/{id} [get]
 func (ph *ProfileHandler) GetProfile(ctx *gin.Context) {
-	profileIDStr := ctx.Param("id")
-	ProfileID, err := strconv.Atoi(profileIDStr)
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{
+	// Ambil user_id dari Gin Context
+	userIDRaw, exists := ctx.Get("user_id")
+	if !exists {
+		ctx.JSON(http.StatusUnauthorized, gin.H{
 			"success": false,
-			"message": "Profile ID tidak valid",
+			"message": "Unauthorized: user ID tidak ditemukan di context",
 		})
 		return
 	}
-	profiles, err := ph.pr.GetProfile(ctx.Request.Context(), ProfileID)
+
+	profileID, ok := userIDRaw.(int)
+	if !ok {
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "User dalam context tidak valid",
+		})
+		return
+	}
+	profiles, err := ph.pr.GetProfile(ctx.Request.Context(), profileID)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -56,80 +61,52 @@ func (ph *ProfileHandler) GetProfile(ctx *gin.Context) {
 }
 
 func (s *ProfileHandler) EditProfile(ctx *gin.Context) {
-	profileIDStr := ctx.Param("id")
-	profileID, err := strconv.Atoi(profileIDStr)
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Profile ID tidak valid",
-		})
+	userIDRaw, exists := ctx.Get("user_id")
+	if !exists {
+		ctx.JSON(http.StatusUnauthorized, gin.H{"success": false, "message": "Unauthorized"})
 		return
 	}
 
-	// Ambil data dari form
+	userID, ok := userIDRaw.(int)
+	if !ok {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Invalid user ID"})
+		return
+	}
+
 	var body models.ProfileBody
 	if err := ctx.ShouldBind(&body); err != nil {
-		log.Println("Gagal bind data.\nSebab:", err.Error())
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Format data tidak valid",
-		})
+		ctx.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "Format data tidak valid"})
 		return
 	}
 
-	// Ambil claims dari JWT
-	claims, isExist := ctx.Get("claims")
-	if !isExist {
-		ctx.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-			"success": false,
-			"error":   "Silakan login kembali",
-		})
-		return
-	}
-	user, ok := claims.(pkg.Claims)
-	if !ok {
-		ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Terjadi kesalahan internal",
-		})
-		return
+	var filename *string
+	if body.Image != nil {
+		savePath, generatedFilename, err := utils.UploadImageFile(ctx, body.Image, "public", fmt.Sprintf("user_%d", userID))
+		if err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+			return
+		}
+
+		if err := ctx.SaveUploadedFile(body.Image, savePath); err != nil {
+			ctx.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "Gagal menyimpan file gambar"})
+			return
+		}
+
+		filename = &generatedFilename
 	}
 
-	fmt.Println(user)
-	// Upload gambar
-	file := body.Image
-	ext := filepath.Ext(file.Filename)
-	filename := fmt.Sprintf("%d_images_%d%s", time.Now().UnixNano(), user.UserId, ext)
-	location := filepath.Join("public", filename)
-
-	if err := ctx.SaveUploadedFile(file, location); err != nil {
-		log.Println("Gagal upload gambar.\nSebab:", err.Error())
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Gagal upload gambar",
-		})
-		return
-	}
-
-	// Simpan ke database
+	// Panggil fungsi PATCH di repository
 	profile, err := s.pr.EditProfile(
 		ctx.Request.Context(),
 		filename,
 		body.FirstName,
 		body.LastName,
 		body.Phone,
-		profileID)
+	)
 	if err != nil {
-		log.Println("Gagal update profil.\nSebab:", err.Error())
-		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Terjadi kesalahan saat menyimpan data",
-		})
+		ctx.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
 		return
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    profile,
-	})
+	ctx.JSON(http.StatusOK, gin.H{"success": true, "data": profile})
 }

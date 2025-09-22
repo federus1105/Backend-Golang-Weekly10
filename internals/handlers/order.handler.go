@@ -25,31 +25,6 @@ func NewOrderHandler(or *repositories.OrderRepository) *OrderHandler {
 // @Success 201 {object} models.Order
 // @Security BearerAuth
 // @Router /order [post]
-//
-//	func (oh *OrderHandler) CreateOrder(ctx *gin.Context) {
-//		var body models.Order
-//		if err := ctx.ShouldBind(&body); err != nil {
-//			ctx.JSON(http.StatusInternalServerError, gin.H{
-//				"error":   err.Error(),
-//				"success": false,
-//			})
-//			return
-//		}
-//		newOrder, err := oh.or.CreateOrder(ctx.Request.Context(), body)
-//		if err != nil {
-//			ctx.JSON(http.StatusInternalServerError, gin.H{
-//				"success": false,
-//				"error":   err.Error(),
-//			})
-//			return
-//		}
-//		ctx.JSON(http.StatusCreated, gin.H{
-//			"success": true,
-//			"data":    newOrder,
-//		})
-//	}
-// CreateOrder is the request payload for creating an order
-
 func (oh *OrderHandler) CreateOrder(ctx *gin.Context) {
 	var req models.Order
 
@@ -106,7 +81,6 @@ func (oh *OrderHandler) CreateOrder(ctx *gin.Context) {
 		return
 	}
 	newOrder.Seats = req.Seats
-	// fmt.Printf("Response Order: %+v\n", newOrder)
 	// Step 5: Kirim response
 	ctx.JSON(http.StatusCreated, gin.H{
 		"success": true,

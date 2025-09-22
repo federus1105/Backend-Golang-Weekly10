@@ -16,6 +16,7 @@ import (
 
 func InitRouter(db *pgxpool.Pool, rdb *redis.Client) *gin.Engine {
 	router := gin.Default()
+	router.Use(gin.Recovery())
 	router.Use(middlewares.MyLogger)
 	router.Use(middlewares.CORSMiddleware)
 
@@ -32,9 +33,9 @@ func InitRouter(db *pgxpool.Pool, rdb *redis.Client) *gin.Engine {
 
 	router.Static("/img", "public")
 
-	InitAuthRouter(router, db)
+	InitAuthRouter(router, db, rdb)
 	InitMoviesRouter(router, db, rdb)
-	InitScheduleRouter(router, db,rdb)
+	InitScheduleRouter(router, db, rdb)
 	InitSeatsRouter(router, db)
 	InitProfileRouter(router, db)
 	InitOrderRouter(router, db)

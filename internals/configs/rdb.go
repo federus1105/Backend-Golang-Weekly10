@@ -14,9 +14,6 @@ func InitRDB() (*redis.Client, error) {
 	rdbHost := os.Getenv("DBHOST")
 	rdbPort := os.Getenv("REDISPORT")
 
-	// connstring := fmt.Sprintf("postgres://%s:%s@%s:%s/%s", dbUser, dbPass, dbHost, dbPort, dbName)
-	// return pgxpool.New(context.Background(), connstring)
-
 	rdb := redis.NewClient(&redis.Options{
 		Addr:     fmt.Sprintf("%s:%s", rdbHost, rdbPort),
 		Username: rdbUser,
@@ -25,7 +22,3 @@ func InitRDB() (*redis.Client, error) {
 	})
 	return rdb, nil
 }
-
-// func TestRDB(rdb *redis.Client) error {
-// 	return rdb.Ping(ctx context.Context.Background())
-// }

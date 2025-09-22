@@ -13,6 +13,6 @@ func InitProfileRouter(router *gin.Engine, db *pgxpool.Pool) {
 	sr := repositories.NewProfileRepository(db)
 	sh := handlers.NewProfileHandler(sr)
 
-	profileRouter.GET("/:id", middlewares.VerifyToken, middlewares.Access("User", "Admin"), sh.GetProfile)
-	profileRouter.PUT("/:id", middlewares.VerifyToken, middlewares.Access("Admin", "User"), sh.EditProfile)
+	profileRouter.GET("", middlewares.VerifyToken, middlewares.Access("User", "Admin"), middlewares.AuthMiddleware(), sh.GetProfile)
+	profileRouter.PATCH("/edit", middlewares.VerifyToken, middlewares.Access("Admin", "User"), middlewares.AuthMiddleware(), sh.EditProfile)
 }

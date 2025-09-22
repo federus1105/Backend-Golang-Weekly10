@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/federus1105/weekly/internals/models"
 	"github.com/federus1105/weekly/internals/repositories"
@@ -120,6 +121,7 @@ func (mh *movieHandler) GetDetailMovie(ctx *gin.Context) {
 			"success": false,
 			"message": "Gagal mengambil data Movie",
 		})
+		log.Println("Error GetDetailMovie:", err)
 		return
 	}
 
@@ -135,12 +137,30 @@ func (mh *movieHandler) GetAllMovie(ctx *gin.Context) {
 	if err != nil {
 		page = 1
 	}
-	limit := 10
+	limit := 20
 	offset := (page - 1) * limit
 
 	// Ambil filter jika ada
 	title := ctx.Query("title") // kosong jika tidak ada
-	genre := ctx.Query("genre") // kosong jika tidak ada
+	// ambil genre dari query, pisah dengan koma
+	genreParam := ctx.QueryArray("genre")
+	genreMap := make(map[string]bool)
+	var genre []string
+	for _, g := range genreParam {
+		name := strings.ToLower(strings.TrimSpace(g))
+		if !genreMap[name] {
+			genreMap[name] = true
+			genre = append(genre, name)
+		}
+	}
+	// var genre []string
+	// if len(genreParam) >0 {
+	// 	// genre = strings.Split(genreParam, ",")
+	// 	for _, g := range (genreParam) {
+	// 		genre = append(genre, strings.TrimSpace(g))
+	// 	}
+	// }
+	// genre := genreParam
 
 	// Ambil data dari repository
 	movies, err := mh.mr.GetAllOrFilteredMovies(ctx.Request.Context(), title, genre, limit, offset)
@@ -200,6 +220,7 @@ func (mh *movieHandler) DeleteMovie(ctx *gin.Context) {
 }
 
 func (mh *movieHandler) EditMovie(ctx *gin.Context) {
+	// Ambil parameter movie ID dari URL
 	MovieIDStr := ctx.Param("id")
 	movieID, err := strconv.Atoi(MovieIDStr)
 	if err != nil {
@@ -210,7 +231,7 @@ func (mh *movieHandler) EditMovie(ctx *gin.Context) {
 		return
 	}
 
-	// Ambil data dari form
+	// Bind form data ke struct MovieBody
 	var body models.MovieBody
 	if err := ctx.ShouldBind(&body); err != nil {
 		log.Println("Gagal bind data.\nSebab:", err.Error())
@@ -221,7 +242,10 @@ func (mh *movieHandler) EditMovie(ctx *gin.Context) {
 		return
 	}
 
-	// Ambil claims dari JWT
+	// Set ID dari param ke body
+	body.Id = movieID
+
+	// Ambil claims JWT (jika perlu otentikasi)
 	claims, isExist := ctx.Get("claims")
 	if !isExist {
 		ctx.AbortWithStatusJSON(http.StatusForbidden, gin.H{
@@ -238,10 +262,10 @@ func (mh *movieHandler) EditMovie(ctx *gin.Context) {
 		})
 		return
 	}
+	fmt.Println("User claims:", user)
 
-	fmt.Println(user)
-	// Upload gambar
-	var filename string
+	// Upload gambar Poster (Image)
+	var imagePath *string
 	if body.Image != nil {
 		savePath, generatedFilename, err := utils.UploadImageFile(ctx, body.Image, "public", fmt.Sprintf("user_%d", user.UserId))
 		if err != nil {
@@ -251,29 +275,43 @@ func (mh *movieHandler) EditMovie(ctx *gin.Context) {
 			})
 			return
 		}
-
 		if err := ctx.SaveUploadedFile(body.Image, savePath); err != nil {
-			log.Println("Gagal menyimpan file.\nSebab:", err.Error())
+			log.Println("Gagal menyimpan file poster.\nSebab:", err.Error())
 			ctx.JSON(http.StatusInternalServerError, gin.H{
 				"success": false,
-				"error":   "Gagal menyimpan file gambar",
+				"error":   "Gagal menyimpan file poster",
 			})
 			return
 		}
-
-		filename = generatedFilename
+		imagePath = &generatedFilename
 	}
 
-	// Simpan ke database
-	profile, err := mh.mr.EditMovie(
-		ctx.Request.Context(),
-		filename,
-		body.Title,
-		body.Duration,
-		body.Synopsis,
-		movieID)
+	// Upload gambar Backdrop
+	var backdropPath *string
+	if body.Backdrop != nil {
+		savePath, generatedFilename, err := utils.UploadImageFile(ctx, body.Backdrop, "public", fmt.Sprintf("user_%d", user.UserId))
+		if err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"error":   err.Error(),
+			})
+			return
+		}
+		if err := ctx.SaveUploadedFile(body.Backdrop, savePath); err != nil {
+			log.Println("Gagal menyimpan file backdrop.\nSebab:", err.Error())
+			ctx.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"error":   "Gagal menyimpan file backdrop",
+			})
+			return
+		}
+		backdropPath = &generatedFilename
+	}
+
+	// Panggil repository untuk update data lengkap dengan transaction
+	updatedMovie, err := mh.mr.EditMovie(ctx.Request.Context(), body, imagePath, backdropPath)
 	if err != nil {
-		log.Println("Gagal update Movie.\nSebab:", err.Error())
+		log.Println("Gagal update movie.\nSebab:", err.Error())
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   "Terjadi kesalahan saat menyimpan data",
@@ -283,7 +321,7 @@ func (mh *movieHandler) EditMovie(ctx *gin.Context) {
 
 	ctx.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"data":    profile,
+		"data":    updatedMovie,
 	})
 }
 
@@ -347,7 +385,7 @@ func (mh *movieHandler) CreateMovie(ctx *gin.Context) {
 	fmt.Println(fileImage)
 
 	// Upload Backdrop
-	var filebackdrop string
+	// var filebackdrop string
 	if body.Backdrop != nil {
 		savePath, generatedFilename, err := utils.UploadImageFile(ctx, body.Backdrop, "public", fmt.Sprintf("backdrop_path%d", user.UserId))
 		if err != nil {
@@ -366,22 +404,22 @@ func (mh *movieHandler) CreateMovie(ctx *gin.Context) {
 			})
 			return
 		}
-
-		filebackdrop = generatedFilename
+		log.Println(generatedFilename)
+		// filebackdrop = generatedFilename
 	}
 
 	// Simpan ke database
 	movieEntity := models.MovieBody{
-		Title:        body.Title,
-		ReleaseDate:  body.ReleaseDate,
-		Duration:     body.Duration,
-		Synopsis:     body.Synopsis,
-		Director:     body.Director,
-		ActorIDs:     body.ActorIDs,
-		GenreIDs:     body.GenreIDs,
-		Rating:       body.Rating,
-		PosterPath:   fileImage,
-		BackdropPath: filebackdrop,
+		Title:       body.Title,
+		ReleaseDate: body.ReleaseDate,
+		Duration:    body.Duration,
+		Synopsis:    body.Synopsis,
+		Director:    body.Director,
+		ActorIDs:    body.ActorIDs,
+		GenreIDs:    body.GenreIDs,
+		Rating:      body.Rating,
+		// PosterPath:   fileImage,
+		// BackdropPath: filebackdrop,
 	}
 
 	movie, err := mh.mr.CreateMovie(ctx.Request.Context(), movieEntity)
@@ -398,4 +436,77 @@ func (mh *movieHandler) CreateMovie(ctx *gin.Context) {
 		"success": true,
 		"data":    movie,
 	})
+}
+
+func (mh *movieHandler) GetMovieAdmin(ctx *gin.Context) {
+	page, err := strconv.Atoi(ctx.Query("page"))
+	if err != nil {
+		page = 1
+	}
+	limit := 20
+	offset := (page - 1) * limit
+
+	movies, err := mh.mr.GetMovieAdmin(ctx.Request.Context(), limit, offset)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"succes": false,
+			"data":   movies,
+		})
+		return
+	}
+	if len(movies) == 0 {
+		ctx.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"data":    []string{},
+			"message": "Tidak ada data movie",
+		})
+		return
+	}
+	ctx.JSON(http.StatusOK, gin.H{
+		"succes": true,
+		"data":   movies,
+	})
+}
+
+func (h *movieHandler) GetMoviesByGenres(w *gin.Context) {
+	genreParam := w.Query("genres")
+	if genreParam == "" {
+		w.JSON(http.StatusBadRequest, gin.H{
+			"succes": false,
+			"error":  "No genre IDs provided",
+		})
+		return
+	}
+
+	genreIDs := strings.Split(genreParam, ",")
+	// ctx := r.Context()
+
+	ctx := w.Request.Context()
+
+	movies, err := h.mr.GetMoviesByAllGenres(ctx, genreIDs)
+	if err != nil {
+		w.JSON(http.StatusInternalServerError, gin.H{
+			"succes":  false,
+			"message": "Failed to get movies",
+			"error":   err.Error(),
+		})
+		fmt.Println("Genre IDs:", genreIDs)
+		return
+	}
+	w.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    movies,
+	})
+}
+
+func (h *movieHandler) GetAllGenres(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	genres, err := h.mr.GetAllGenres(ctx)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, genres)
 }

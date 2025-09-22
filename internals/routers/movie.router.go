@@ -14,13 +14,15 @@ func InitMoviesRouter(router *gin.Engine, db *pgxpool.Pool, rdb *redis.Client) {
 	sr := repositories.NewMoviesRepository(db, rdb)
 	sh := handlers.NewMovieHandler(sr)
 
+	movieRouter.GET("/genres/list", sh.GetAllGenres)
+	// movieRouter.GET("/genres", sh.GetMoviesByGenres)
+	movieRouter.GET("/admin", sh.GetMovieAdmin)
 	movieRouter.GET("/", sh.GetAllMovie)
 	movieRouter.GET("/upcoming", sh.GetUpcomingMovies)
 	movieRouter.GET("/popular", sh.GetPopularMovies)
-	movieRouter.GET("/filter", sh.GetFilterMovie)
 	movieRouter.GET("/:id", middlewares.VerifyToken, middlewares.Access("User", "Admin"), sh.GetDetailMovie)
 	movieRouter.GET("/allmovie", middlewares.VerifyToken, middlewares.Access("Admin"), sh.GetAllMovie)
 	movieRouter.DELETE("/:movie_id", middlewares.VerifyToken, middlewares.Access("Admin"), sh.DeleteMovie)
-	movieRouter.PUT("/:id", middlewares.VerifyToken, middlewares.Access("Admin"), sh.EditMovie)
-	movieRouter.POST("/create", middlewares.VerifyToken, middlewares.Access("Admin"), sh.CreateMovie)
+	movieRouter.PATCH("/:id", middlewares.VerifyToken, middlewares.Access("Admin"), sh.EditMovie)
+	// movieRouter.POST("/create", middlewares.VerifyToken, middlewares.Access("Admin"), sh.CreateMovie)
 }
