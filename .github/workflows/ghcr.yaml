@@ -9,6 +9,9 @@ jobs:
       - name: Build and publish a Docker image for ${{ github.repository }}
         uses: macbre/push-to-ghcr@master
         with:
+          context: . # Direktori tempat Dockerfile berada
+          push: true
+          tags: ghcr.io/${{ github.repository }}:latest
           image_name: ${{ github.repository }} # it will be lowercased internally
           github_token: ${{ secrets.GITHUB_TOKEN }}
       - name: Set lowercase image name
