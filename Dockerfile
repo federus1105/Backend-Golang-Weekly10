@@ -3,20 +3,23 @@ FROM golang:1.25-alpine AS builder
 
 WORKDIR /build
 
+RUN apk add --no-cache git
+
 COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN go build -v -x -o server ./cmd/main.go
 
-# Tahap 2: runtime
-FROM alpine:latest
+RUN go build -o server main.go
 
-RUN apk --no-cache add ca-certificates
+FROM alpine:3.22
 
 WORKDIR /app
-COPY --from=builder /build/server .
+
+COPY --from=builder /build/server ./server
+
+RUN chmod +x server
 
 EXPOSE 8080
 
-CMD ["./server"]
+CMD [ "./server" ]
