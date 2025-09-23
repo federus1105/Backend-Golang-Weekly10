@@ -361,7 +361,7 @@ func (mh *movieHandler) CreateMovie(ctx *gin.Context) {
 	}
 
 	// Upload Poster (Image)
-	var fileImage string
+	// var fileImage string
 	if body.Image != nil {
 		savePath, generatedFilename, err := utils.UploadImageFile(ctx, body.Image, "public", fmt.Sprintf("poster_path%d", user.UserId))
 		if err != nil {
@@ -380,9 +380,9 @@ func (mh *movieHandler) CreateMovie(ctx *gin.Context) {
 			})
 			return
 		}
-		fileImage = generatedFilename
+		// log.Println(fileImage)
+		body.Imagestr = generatedFilename
 	}
-	fmt.Println(fileImage)
 
 	// Upload Backdrop
 	// var filebackdrop string
@@ -405,7 +405,7 @@ func (mh *movieHandler) CreateMovie(ctx *gin.Context) {
 			return
 		}
 		log.Println(generatedFilename)
-		// filebackdrop = generatedFilename
+		body.Backdropstr = generatedFilename
 	}
 
 	// Simpan ke database
@@ -418,8 +418,8 @@ func (mh *movieHandler) CreateMovie(ctx *gin.Context) {
 		ActorIDs:    body.ActorIDs,
 		GenreIDs:    body.GenreIDs,
 		Rating:      body.Rating,
-		// PosterPath:   fileImage,
-		// BackdropPath: filebackdrop,
+		Imagestr:    body.Imagestr,
+		Backdropstr: body.Backdropstr,
 	}
 
 	movie, err := mh.mr.CreateMovie(ctx.Request.Context(), movieEntity)
