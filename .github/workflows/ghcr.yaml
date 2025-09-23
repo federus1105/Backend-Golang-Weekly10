@@ -25,5 +25,4 @@ jobs:
         with:
           context: ./weekly10
           push: true
-          tags: ghcr.io/${{ github.repository }}:${{ github.sha }}
-           ghcr.io/${{ github.repository }}:latest
+          tags: ghcr.io/${{ github.repository }}:latest
