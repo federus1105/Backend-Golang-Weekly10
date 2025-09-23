@@ -24,5 +24,5 @@ func InitMoviesRouter(router *gin.Engine, db *pgxpool.Pool, rdb *redis.Client) {
 	movieRouter.GET("/allmovie", middlewares.VerifyToken, middlewares.Access("Admin"), sh.GetAllMovie)
 	movieRouter.DELETE("/:movie_id", middlewares.VerifyToken, middlewares.Access("Admin"), sh.DeleteMovie)
 	movieRouter.PATCH("/:id", middlewares.VerifyToken, middlewares.Access("Admin"), sh.EditMovie)
-	// movieRouter.POST("/create", middlewares.VerifyToken, middlewares.Access("Admin"), sh.CreateMovie)
+	movieRouter.POST("/create", middlewares.VerifyToken, middlewares.Access("Admin"), sh.CreateMovie)
 }
