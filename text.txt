@@ -1,0 +1,43 @@
+services:
+  postgres:
+    image: postgres:latest
+    environment:
+    - POSTGRES_PASSWORD=44bbc068dd8e4be8
+    - POSTGRES_USER=rudi
+    - POSTGRES_DB=rudi
+    volumes:
+    - pg-data:/var/lib/postgresql/data
+    ports:
+    - 8008:5432
+    networks:
+    - my-net
+  backend:
+    build:
+      context: ./backend-golang # Ganti dengan path direktori kode Go-mu
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080" # Contoh: jika backend-mu berjalan di port 8080
+    networks:
+      - my-net
+    depends_on:
+      - postgres # Pastikan backend menunggu postgres siap
+networks:
+  my-net:
+volumes:
+  pg-data:
+
+
+
+  name: Building Image and Pushing to GHCR
+on: [push]
+jobs:
+  Build-And-Publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v5
+      - name: Build and publish a Docker image for ${{ github.repository }}
+        uses: macbre/push-to-ghcr@master
+        with:
+          image_name: ${{ github.repository }} # it will be lowercased internally
+          github_token: ${{ secrets.GITHUB_TOKEN }}
