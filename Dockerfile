@@ -1,24 +1,22 @@
+# Tahap 1: build
 FROM golang:1.25-alpine AS builder
 
-WORKDIR /server
+WORKDIR /build
 
-COPY go.mod go.sum ./
-
+COPY go.mod go.sum
 RUN go mod download
 
 COPY . .
+RUN go build -o server ./cmd/main.go
 
-RUN go build -trimpath -ldflags="-s -w" -o main .
-
+# Tahap 2: runtime
 FROM alpine:latest
 
 RUN apk --no-cache add ca-certificates
 
-WORKDIR /server
-
-COPY --from=builder /server/main .
+WORKDIR /app
+COPY --from=builder /build/server .
 
 EXPOSE 8080
 
-# Jalankan aplikasi.
-CMD ["/server/main"]
+CMD ["./server"]
