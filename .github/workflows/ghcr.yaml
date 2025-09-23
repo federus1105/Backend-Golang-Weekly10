@@ -37,3 +37,4 @@ jobs:
           tags: |
             ghcr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}
             ghcr.io/${{ env.IMAGE_NAME }}:latest
+          progress: plain
