@@ -18,8 +18,8 @@ WORKDIR /app
 
 COPY --from=builder /build/server ./server
 
-RUN chmod +x ./server
+RUN chmod +x server
 
 EXPOSE 8080
 
-CMD [ "./server"]
+CMD [ "./app/server"]
