@@ -1,6 +1,6 @@
-  name: Building Image and Pushing to GHCR
-  on: [push]
-  jobs:
+name: Building Image and Pushing to GHCR
+on: [push]
+jobs:
   Build-And-Publish:
     runs-on: ubuntu-latest
     steps:
