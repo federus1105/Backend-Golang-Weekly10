@@ -40,6 +40,8 @@ type MovieBody struct {
 	Rating      float64               `form:"rating"`
 	Image       *multipart.FileHeader `form:"poster_path"`
 	Backdrop    *multipart.FileHeader `form:"backdrop_path"`
+	Imagestr    string                `json:"image"`
+	Backdropstr string                `json:"backdrop"`
 }
 
 type Genre struct {
