@@ -1,6 +1,5 @@
 name: Building Image and push GHCR
 
-# Trigger workflow saat ada push ke branch 'main'
 on: [push]
 
 jobs:
@@ -24,6 +23,7 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
-          context: . # Direktori tempat Dockerfile berada
+          context: ./weekly10
           push: true
-          tags: ghcr.io/${{ github.repository }}:${{ github.sha }} # Nama image dengan tag unik
+          tags: ghcr.io/${{ github.repository }}:${{ github.sha }}
+           ghcr.io/${{ github.repository }}:latest
