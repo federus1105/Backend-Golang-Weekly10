@@ -1,10 +1,7 @@
 name: Building Image and push GHCR
 
 # Trigger workflow saat ada push ke branch 'main'
-on:
-  push:
-    branches:
-      - main
+on: [push]
 
 jobs:
   build-and-push-image:
