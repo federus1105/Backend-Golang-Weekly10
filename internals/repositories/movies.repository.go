@@ -506,7 +506,7 @@ func (mr *MoviesRepository) CreateMovie(rctx context.Context, body models.MovieB
 
 	// Insert ke tabel movies_actor
 	for _, actorID := range body.ActorIDs {
-		actorSQL := `INSERT INTO movies_actor (id_movie, id_actor) VALUES ($1, $2)`
+		actorSQL := `INSERT INTO movies_actor (id_movie, id_actor) VALUES ($1, $2) RETURNING id_actor`
 		if _, err := tx.Exec(rctx, actorSQL, newMovie.Id, actorID); err != nil {
 			log.Println("Failed to insert actor relation:", err)
 			return models.MovieBody{}, err
@@ -521,6 +521,27 @@ func (mr *MoviesRepository) CreateMovie(rctx context.Context, body models.MovieB
 			return models.MovieBody{}, err
 		}
 
+	}
+	for _, bs := range body.Schedules {
+		for i := 0; i < len(bs.Date); i++ {
+			date := bs.Date[i]
+			idCinema := bs.IdCinema[i]
+			idTime := bs.IdTime[i]
+			idLocation := bs.IdLocation[i]
+
+			scheduleSQL := `INSERT INTO schedule (id_movie, date, id_cinema, id_time, id_location)
+            VALUES ($1, $2, $3, $4, $5)`
+			if _, err := tx.Exec(rctx, scheduleSQL,
+				newMovie.Id,
+				date,
+				idCinema,
+				idTime,
+				idLocation,
+			); err != nil {
+				log.Println("Failed to insert schedule:", err)
+				return models.MovieBody{}, err
+			}
+		}
 	}
 
 	// Commit transaksi
