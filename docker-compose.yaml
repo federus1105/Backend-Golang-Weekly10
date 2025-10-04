@@ -11,7 +11,7 @@ services:
 
   backend:
     image: ghcr.io/federus1105/backend-golang-weekly10:latest
-    env_file::
+    env_file:
       - .env
     ports:
       - 8080:8080
@@ -23,7 +23,7 @@ services:
 
   postgres:
     image: postgres:17-alpine3.21
-    env_file::
+    env_file:
     - .env
     volumes:
     - pg-data:/var/lib/postgresql/data
