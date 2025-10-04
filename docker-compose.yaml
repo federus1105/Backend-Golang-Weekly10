@@ -1,0 +1,50 @@
+services:
+
+  frontend:
+    image: ghcr.io/federus1105/project_tickitz_react:latest
+    ports:
+      - 5173:5173
+    depends_on:
+      - backend
+    networks:
+      - my-net
+
+  backend:
+    image: ghcr.io/federus1105/backend-golang-weekly10:latest
+    environment:
+      - ./.env
+    ports:
+      - 8080:8080
+    depends_on:
+      - redis 
+      - postgres
+    networks:
+      - my-net
+
+  postgres:
+    image: postgres:17-alpine3.21
+    environment:
+    - POSTGRES_PASSWORD=12345
+    - POSTGRES_USER=federus
+    - POSTGRES_DB=tickitz
+    volumes:
+    - pg-data:/var/lib/postgresql/data
+    ports:
+    - 5324:5432
+    networks:
+      - my-net
+
+  redis:
+    image: redis:8.2-alpine
+    ports:
+      - 6891:6379
+    volumes:
+      - redis-data:/data 
+    networks:
+      - my-net
+
+networks:
+  my-net:
+volumes: 
+  pg-data:
+  redis-data:
