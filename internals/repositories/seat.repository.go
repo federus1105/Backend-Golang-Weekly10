@@ -16,25 +16,19 @@ func NewSeatRepository(db *pgxpool.Pool) *SeatRepository {
 }
 
 func (sr *SeatRepository) GetSeats(rctx context.Context, Id int) ([]models.Seat, error) {
-	sql := `WITH target_schedule AS (
-	SELECT sc.id AS schedule_id, sc.id_cinema, c.price
-	FROM schedule sc
-	JOIN cinema c ON c.id = sc.id_cinema
-	WHERE sc.id = $1
-)
-SELECT
-	s.id,
-	s.codeseat,
-CASE
-	WHEN o.id_schedule = t.schedule_id AND sc.id_cinema = t.id_cinema THEN false
-	ELSE true
-END AS isstatus,
-	t.price AS seat_price
+	sql := `SELECT
+    s.id,
+    s.codeseat,
+    CASE
+        WHEN o.id IS NOT NULL THEN true
+        ELSE false
+    END AS is_sold
 FROM seats s
 LEFT JOIN order_seat os ON s.id = os.id_seats
 LEFT JOIN orders o ON o.id = os.id_order
 LEFT JOIN schedule sc ON sc.id = o.id_schedule
-LEFT JOIN target_schedule t ON true
+WHERE sc.id_cinema = $1  OR sc.id_cinema IS NULL
+GROUP BY s.id, s.codeseat, o.id
 ORDER BY s.codeseat ASC;`
 
 	rows, err := sr.db.Query(rctx, sql, Id)
@@ -45,7 +39,7 @@ ORDER BY s.codeseat ASC;`
 	var seats []models.Seat
 	for rows.Next() {
 		var Seat models.Seat
-		if err := rows.Scan(&Seat.Id, &Seat.Code, &Seat.Status, &Seat.Price); err != nil {
+		if err := rows.Scan(&Seat.Id, &Seat.Code, &Seat.Status); err != nil {
 			return nil, err
 		}
 		seats = append(seats, Seat)

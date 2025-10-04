@@ -40,6 +40,7 @@ func (h *seatHandler) GetSeats(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"message": "Gagal mengambil data Kursi",
+			"error":   err.Error(),
 		})
 		return
 	}

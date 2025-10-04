@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"context"
+	"log"
 
 	"github.com/federus1105/weekly/internals/models"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -17,24 +18,25 @@ func NewScheduleRepository(db *pgxpool.Pool, rdb *redis.Client) *ScheduleReposit
 	return &ScheduleRepository{db: db, rdb: rdb}
 }
 
-func (sr *ScheduleRepository) GetSchedule(rctx context.Context, id int) ([]models.Schedule, error) {
+func (sr *ScheduleRepository) GetSchedule(rctx context.Context, id_movie int) ([]models.Schedule, error) {
 	sql := `SELECT
 s.id,
+s.id_movie,
 s.date,
 		m.title AS title,
-		m.image AS image,
 c.name AS cinema,
 t.name AS time,
-l.name AS location
+l.name AS location,
+c.image as icon
 	FROM schedule s
 	JOIN movies m ON s.id_movie = m.id
 	LEFT JOIN cinema c ON s.id_cinema = c.id
 	LEFT JOIN time t ON s.id_time = t.id
 	LEFT JOIN location l ON s.id_location = l.id
-	WHERE s.id = $1
+	WHERE m.id = $1
 ORDER BY s.date ASC`
 
-	rows, err := sr.db.Query(rctx, sql, id)
+	rows, err := sr.db.Query(rctx, sql, id_movie)
 	if err != nil {
 		return nil, err
 	}
@@ -43,7 +45,7 @@ ORDER BY s.date ASC`
 	var schedules []models.Schedule
 	for rows.Next() {
 		var schedule models.Schedule
-		if err := rows.Scan(&schedule.Id, &schedule.Date, &schedule.Title, &schedule.Image, &schedule.Cinema, &schedule.Time, &schedule.Location); err != nil {
+		if err := rows.Scan(&schedule.Id, &schedule.Idmovie, &schedule.Date, &schedule.Title, &schedule.Cinema, &schedule.Time, &schedule.Location, &schedule.Image,); err != nil {
 			return nil, err
 		}
 		schedules = append(schedules, schedule)
@@ -51,82 +53,39 @@ ORDER BY s.date ASC`
 	return schedules, nil
 }
 
-// func (sr *ScheduleRepository) GetSchedule(ctx context.Context, id int) ([]models.Schedule, error) {
-// 	start := time.Now()
-// 	redisKey := "firdaus:schedule-all"
-// 	cmd := sr.rdb.Get(ctx, redisKey)
-// 	if cmd.Err() != nil {
-// 		if cmd.Err() == redis.Nil {
-// 			log.Printf("Key %s does not exist\n", redisKey)
-// 		} else {
-// 			log.Println("Redis Error. \nCause: ", cmd.Err().Error())
-// 		}
-// 	} else {
-// 		// cache hit
-// 		var cachedSchedules []models.Schedule
-// 		cmdByte, err := cmd.Bytes()
-// 		if err != nil {
-// 			log.Println("Internal server error.\nCause: ", err.Error())
-// 		} else {
-// 			if err := json.Unmarshal(cmdByte, &cachedSchedules); err != nil {
-// 				log.Println("Internal Server Error. \nCause: ", err.Error())
-// 			}
-// 		}
-// 		if len(cachedSchedules) > 0 {
-// 			log.Printf("Key %s found in cache ✅", redisKey)
-// 			log.Printf("Served in %s using Redis", time.Since(start))
-// 			return cachedSchedules, nil
-// 		}
-// 	}
-// 	sql := `SELECT
-// s.id,
-// s.date,
-// 		m.title AS title,
-// 		m.image AS image,
-// c.name AS cinema,
-// t.name AS time,
-// l.name AS location
-// 	FROM schedule s
-// 	JOIN movies m ON s.id_movie = m.id
-// 	LEFT JOIN cinema c ON s.id_cinema = c.id
-// 	LEFT JOIN time t ON s.id_time = t.id
-// 	LEFT JOIN location l ON s.id_location = l.id
-// 	WHERE s.id = $1
-// ORDER BY s.date ASC`
-// 	rows, err := sr.db.Query(ctx, sql, id)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	defer rows.Close()
-// 	var schedules []models.Schedule
-// 	for rows.Next() {
-// 		var schedule models.Schedule
-// 		if err := rows.Scan(&schedule.Id, &schedule.Date, &schedule.Title, &schedule.Image, &schedule.Cinema, &schedule.Time, &schedule.Location); err != nil {
-// 			return nil, err
-// 		}
-// 		schedules = append(schedules, schedule)
-// 	}
-// 	// renew cache
-// 	bt, err := json.Marshal(schedules)
-// 	if err != nil {
-// 		log.Println("Internal Server Error.\n Cause: ", err.Error())
-// 	}
-// 	if err := sr.rdb.Set(ctx, redisKey, string(bt), 5*time.Minute).Err(); err != nil {
-// 		log.Println("Redis Error. \nCause: ", err.Error())
-// 	}
-// 	log.Printf("[REDIS TIMING] Served in %s using DB (cache miss)", time.Since(start))
-// 	return schedules, nil
-// }
+func (sr *ScheduleRepository) CreateSchedule(
+    rctx context.Context,
+    input models.BodyScheduleInput,
+) ([]models.BodySchedule, error) {
+    sql := `INSERT INTO schedule (id_movie, date, id_cinema, id_time, id_location)
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING id, id_movie, date, id_cinema, id_time, id_location`
 
-// func (sr *ScheduleRepository) GetGenre(rctx context.Context) []models.Movie {
+    var createdSchedules []models.BodySchedule
 
-// 	sql := fmt.Sprintf(`
-//     SELECT m.id, m.title
-//     FROM movies m
-//     JOIN movies_genre mg ON m.id = mg.id_movie
-//     WHERE mg.id_genre IN (%s)
-//     GROUP BY m.id
-//     HAVING COUNT(DISTINCT mg.id_genre) = %d
-// `, strings.Join(placeholders, ", "), len(id_genre))
+    for _, cinemaID := range input.Id_Cinema {
+        for _, timeID := range input.Time {
+            for _, locationID := range input.Location {
+                values := []any{input.Id_movie, input.Date, cinemaID, timeID, locationID}
+                var newSchedule models.BodySchedule
 
-// }
+                err := sr.db.QueryRow(rctx, sql, values...).Scan(
+                    &newSchedule.Id,
+                    &newSchedule.Id_movie,
+                    &newSchedule.Date,
+                    &newSchedule.Id_Cinema,
+                    &newSchedule.Id_Time,
+                    &newSchedule.Id_Location,
+                )
+                if err != nil {
+                    log.Println("Failed to insert schedule:", err)
+                    return nil, err
+                }
+
+                createdSchedules = append(createdSchedules, newSchedule)
+            }
+        }
+    }
+
+    return createdSchedules, nil
+}

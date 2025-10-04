@@ -66,7 +66,7 @@ func (mh *movieHandler) GetUpcomingMovies(ctx *gin.Context) {
 // @Produce json
 // @Param page query int false "Page"
 // @Success 200 {object} map[string]interface{}
-// @Router /movies/popular [get]
+// @Router /movies/popular [get]|
 func (mh *movieHandler) GetPopularMovies(ctx *gin.Context) {
 	page, err := strconv.Atoi(ctx.Query("page"))
 
@@ -327,19 +327,39 @@ func (mh *movieHandler) EditMovie(ctx *gin.Context) {
 
 func (mh *movieHandler) CreateMovie(ctx *gin.Context) {
 	var body models.MovieBody
-	fmt.Println("Content-Type:", ctx.ContentType())
-	fmt.Println("release_date raw:", ctx.PostForm("release_date"))
 
-	// Ambil form data
+	// Ambil form data biasa
 	if err := ctx.ShouldBind(&body); err != nil {
 		log.Println("Gagal bind data:", err)
 		ctx.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
-
-			"error": "Format data tidak valid",
+			"error":   "Format data tidak valid",
 		})
 		return
 	}
+	 // Buat satu BodySchedules dari arrays
+    bs := models.BodySchedules{}
+
+    bs.Date = ctx.PostFormArray("date[]")
+    idCinemaStr := ctx.PostFormArray("id_cinema[]")
+    idTimeStr := ctx.PostFormArray("id_time[]")
+    idLocationStr := ctx.PostFormArray("id_location[]")
+
+    // Convert strings ke ints
+    for _, s := range idCinemaStr {
+        v, _ := strconv.Atoi(s)
+        bs.IdCinema = append(bs.IdCinema, v)
+    }
+    for _, s := range idTimeStr {
+        v, _ := strconv.Atoi(s)
+        bs.IdTime = append(bs.IdTime, v)
+    }
+    for _, s := range idLocationStr {
+        v, _ := strconv.Atoi(s)
+        bs.IdLocation = append(bs.IdLocation, v)
+    }
+
+    body.Schedules = []models.BodySchedules{bs}
 
 	// Ambil JWT claims
 	claims, exists := ctx.Get("claims")
@@ -350,7 +370,6 @@ func (mh *movieHandler) CreateMovie(ctx *gin.Context) {
 		})
 		return
 	}
-
 	user, ok := claims.(pkg.Claims)
 	if !ok {
 		ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
@@ -361,7 +380,6 @@ func (mh *movieHandler) CreateMovie(ctx *gin.Context) {
 	}
 
 	// Upload Poster (Image)
-	// var fileImage string
 	if body.Image != nil {
 		savePath, generatedFilename, err := utils.UploadImageFile(ctx, body.Image, "public", fmt.Sprintf("poster_path%d", user.UserId))
 		if err != nil {
@@ -380,12 +398,10 @@ func (mh *movieHandler) CreateMovie(ctx *gin.Context) {
 			})
 			return
 		}
-		// log.Println(fileImage)
 		body.Imagestr = generatedFilename
 	}
 
 	// Upload Backdrop
-	// var filebackdrop string
 	if body.Backdrop != nil {
 		savePath, generatedFilename, err := utils.UploadImageFile(ctx, body.Backdrop, "public", fmt.Sprintf("backdrop_path%d", user.UserId))
 		if err != nil {
@@ -404,25 +420,11 @@ func (mh *movieHandler) CreateMovie(ctx *gin.Context) {
 			})
 			return
 		}
-		log.Println(generatedFilename)
 		body.Backdropstr = generatedFilename
 	}
 
-	// Simpan ke database
-	movieEntity := models.MovieBody{
-		Title:       body.Title,
-		ReleaseDate: body.ReleaseDate,
-		Duration:    body.Duration,
-		Synopsis:    body.Synopsis,
-		Director:    body.Director,
-		ActorIDs:    body.ActorIDs,
-		GenreIDs:    body.GenreIDs,
-		Rating:      body.Rating,
-		Imagestr:    body.Imagestr,
-		Backdropstr: body.Backdropstr,
-	}
-
-	movie, err := mh.mr.CreateMovie(ctx.Request.Context(), movieEntity)
+	// Simpan ke database lewat repository
+	movie, err := mh.mr.CreateMovie(ctx.Request.Context(), body)
 	if err != nil {
 		log.Println("Gagal simpan movie:", err)
 		ctx.JSON(http.StatusInternalServerError, gin.H{

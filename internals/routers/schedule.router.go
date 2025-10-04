@@ -15,5 +15,6 @@ func InitScheduleRouter(router *gin.Engine, db *pgxpool.Pool, rdb *redis.Client)
 	sr := repositories.NewScheduleRepository(db, rdb)
 	sh := handlers.NewScheduleHandler(sr)
 
-	scheduleRouter.GET("/:id", middlewares.VerifyToken, middlewares.Access("User", "Admin"), sh.GetSchedule)
+	scheduleRouter.GET("/:id_movie", middlewares.VerifyToken, middlewares.Access("User", "Admin"), sh.GetSchedule)
+	scheduleRouter.POST("/create", middlewares.VerifyToken, middlewares.Access("Admin"), sh.CreateSchedule)
 }

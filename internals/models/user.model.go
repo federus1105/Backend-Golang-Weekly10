@@ -3,7 +3,7 @@ package models
 type User struct {
 	Id       int    `db:"id" json:"id"`
 	Email    string `db:"email" json:"email" binding:"required,email"`
-	Password string `db:"password" json:"password" binding:"required, min=8"`
+	Password string `db:"password" json:"password" binding:"required,min=8"`
 	Role     string `db:"role" json:"role"`
 	// Image    string `db:"image" json:"image"`
 }

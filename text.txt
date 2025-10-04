@@ -41,3 +41,46 @@ jobs:
         with:
           image_name: ${{ github.repository }} # it will be lowercased internally
           github_token: ${{ secrets.GITHUB_TOKEN }}
+
+
+
+          <label>Pilih Tanggal:</label>
+<select
+  onChange={e => setSelectedDate(e.target.value)}
+  value={selectedDate}
+>
+  <option value="">-- Pilih tanggal --</option>
+  {scheduleOptions.map(sch => (
+    <option key={sch.Id} value={sch.Date}>
+      {sch.Date}
+    </option>
+  ))}
+</select>
+
+{selectedDate && (
+  <>
+    <label>Pilih Waktu:</label>
+    <select onChange={e => setSelectedTime(e.target.value)} value={selectedTime}>
+      <option value="">-- Pilih waktu --</option>
+      {scheduleOptions
+        .filter(sch => sch.Date === selectedDate)
+        .map(sch => (
+          <option key={sch.Id} value={sch.Time}>
+            {sch.Time}
+          </option>
+        ))}
+    </select>
+
+    <label>Lokasi:</label>
+    <select onChange={...} value={selectedLocation}>
+      <option value="">-- Pilih lokasi --</option>
+      {scheduleOptions
+        .filter(sch => sch.Date === selectedDate && sch.Time === selectedTime)
+        .map(sch => (
+          <option key={sch.Id} value={sch.Location}>
+            {sch.Location}
+          </option>
+        ))}
+    </select>
+  </>
+)}

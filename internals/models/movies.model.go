@@ -28,6 +28,13 @@ type MovieAdmin struct {
 	Duration    string    `db:"duration" json:"duration,omitempty"`
 }
 
+type BodySchedules struct {
+	Idmovie    int      `form:"id_movie"`
+	Date       []string `form:"date"`
+	IdCinema   []int    `form:"id_cinema"`
+	IdTime     []int    `form:"id_time"`
+	IdLocation []int    `form:"id_location"`
+}
 type MovieBody struct {
 	Id          int                   `form:"id"`
 	Title       string                `form:"title"`
@@ -37,6 +44,7 @@ type MovieBody struct {
 	Director    int                   `form:"id_director,omitempty"`
 	ActorIDs    []int                 `form:"actor_ids"`
 	GenreIDs    []int                 `form:"genre_ids"`
+	Schedules   []BodySchedules       `form:"schedule"`
 	Rating      float64               `form:"rating"`
 	Image       *multipart.FileHeader `form:"poster_path"`
 	Backdrop    *multipart.FileHeader `form:"backdrop_path"`

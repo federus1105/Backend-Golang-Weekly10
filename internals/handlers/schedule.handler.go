@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/federus1105/weekly/internals/models"
 	"github.com/federus1105/weekly/internals/repositories"
 	"github.com/gin-gonic/gin"
 )
@@ -26,8 +27,8 @@ func NewScheduleHandler(sr *repositories.ScheduleRepository) *ScheduleHandler {
 // @Security BearerAuth
 // @Router /schedule/{id} [get]
 func (sh *ScheduleHandler) GetSchedule(ctx *gin.Context) {
-	scheduleIDStr := ctx.Param("id")
-	schedule, err := strconv.Atoi(scheduleIDStr)
+	Idmovie := ctx.Param("id_movie")
+	schedule, err := strconv.Atoi(Idmovie)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
@@ -49,4 +50,32 @@ func (sh *ScheduleHandler) GetSchedule(ctx *gin.Context) {
 		"success": true,
 		"data":    schedules,
 	})
+}
+func (sh *ScheduleHandler) CreateSchedule(ctx *gin.Context) {
+    var input models.BodyScheduleInput
+
+    if err := ctx.ShouldBindJSON(&input); err != nil {
+        ctx.JSON(http.StatusBadRequest, gin.H{
+            "success": false,
+            "message": "Invalid request body",
+            "error":   err.Error(),
+        })
+        return
+    }
+
+    newSchedules, err := sh.sr.CreateSchedule(ctx.Request.Context(), input)
+    if err != nil {
+        ctx.JSON(http.StatusInternalServerError, gin.H{
+            "success": false,
+            "message": "Internal server error",
+            "error":   err.Error(),
+        })
+        return
+    }
+
+    ctx.JSON(http.StatusOK, gin.H{
+        "success":  true,
+        "message":  "Create Schedule Successfully",
+        "schedule": newSchedules,
+    })
 }
