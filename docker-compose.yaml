@@ -12,7 +12,7 @@ services:
   backend:
     image: ghcr.io/federus1105/backend-golang-weekly10:latest
     environment:
-      - ./.env
+      - ./weekly10/.env
     ports:
       - 8080:8080
     depends_on:
