@@ -1,23 +1,25 @@
-# Stage 1: Build Go binary
-FROM golang:1.21-alpine AS builder
+# Tahap 1: build
+FROM golang:1.25-alpine AS builder
 
-WORKDIR /app
+WORKDIR /build
 
-# Copy go mod/sum and download deps first (better cache)
+RUN apk add --no-cache git
+
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Copy the rest of the code
 COPY . .
 
-# Build the Go binary
 RUN go build -o server ./cmd/main.go
 
-# Stage 2: Run the binary from a minimal image
 FROM alpine:3.22
 
 WORKDIR /app
 
-COPY --from=builder /app/server .
+COPY --from=builder /build/server .
 
-CMD ["./server"]
+RUN chmod +x server
+
+EXPOSE 8080
+
+CMD ["/app/server"]
