@@ -11,8 +11,8 @@ services:
 
   backend:
     image: ghcr.io/federus1105/backend-golang-weekly10:latest
-    environment:
-      - ./weekly10/.env
+    env_file::
+      - .env
     ports:
       - 8080:8080
     depends_on:
@@ -23,10 +23,8 @@ services:
 
   postgres:
     image: postgres:17-alpine3.21
-    environment:
-    - POSTGRES_PASSWORD=12345
-    - POSTGRES_USER=federus
-    - POSTGRES_DB=tickitz
+    env_file::
+    - .env
     volumes:
     - pg-data:/var/lib/postgresql/data
     ports:
