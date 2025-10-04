@@ -20,10 +20,11 @@ import (
 // @in header
 // @name Authorization
 func main() {
-	if err := godotenv.Load(); err != nil {
-		log.Println("❌ Failed to load env\nCause:", err.Error())
-		return
+	// Hanya load file .env di development
+	if os.Getenv("ENV") != "production" {
+		_ = godotenv.Load()
 	}
+
 	log.Println(os.Getenv("DBUSER"))
 
 	// inisialisasi DB
