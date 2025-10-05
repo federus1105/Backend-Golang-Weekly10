@@ -3,7 +3,7 @@ services:
   frontend:
     image: ghcr.io/federus1105/project_tickitz_react:latest
     ports:
-      - 5011:80
+      - 80:80
     depends_on:
       - backend
     networks:
