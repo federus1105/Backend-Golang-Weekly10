@@ -3,7 +3,7 @@ services:
   frontend:
     image: ghcr.io/federus1105/project_tickitz_react:latest
     ports:
-      - 80:80
+      - 5011:80
     depends_on:
       - backend
     networks:
@@ -14,7 +14,7 @@ services:
     env_file:
       - .env
     ports:
-      - 8080:8080
+      - 5021:8080
     depends_on:
       - redis 
       - postgres
@@ -26,7 +26,7 @@ services:
     env_file:
     - .env
     volumes:
-    - pg-data:/var/lib/postgresql/data
+    - pg:/var/lib/postgresql/data
     ports:
     - 5324:5432
     networks:
@@ -44,5 +44,7 @@ services:
 networks:
   my-net:
 volumes: 
-  pg-data:
+  pg:
+    external: true
   redis-data:
+    external: true
