@@ -1,10 +1,6 @@
 services:
 
   frontend:
-    build:
-      context: .
-      args:
-        VITE_BE_HOST: "http://172.26.245.112:8080"
     image: ghcr.io/federus1105/project_tickitz_react:latest
     ports:
       - 5011:80
