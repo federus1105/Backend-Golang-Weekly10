@@ -42,6 +42,7 @@ func (sh *ScheduleHandler) GetSchedule(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"message": "Gagal mengambil data schedule",
+			"erro": err.Error(),
 		})
 		return
 	}

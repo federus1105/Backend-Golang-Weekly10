@@ -18,6 +18,7 @@ var allowedExtensions = map[string]bool{
 	".jpg":  true,
 	".jpeg": true,
 	".png":  true,
+	".webp": true,
 }
 
 func UploadImageFile(ctx context.Context, file *multipart.FileHeader, uploadDir string, prefix string) (string, string, error) {

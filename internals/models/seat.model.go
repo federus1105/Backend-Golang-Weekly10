@@ -8,22 +8,22 @@ type Seat struct {
 	Id     int     `db:"id" json:"id"`
 	Code   string  `db:"codeseat" json:"seat"`
 	Status bool    `db:"isstatus" json:"status"`
-	Price  float64 `db:"price" json:"price"`
 }
-type seatAlias Seat // alias to avoid recursion
-
 func (s Seat) MarshalJSON() ([]byte, error) {
-	alias := struct {
-		seatAlias
+	type SeatAlias Seat
+
+	var statusText string
+	if s.Status {
+		statusText = "tersedia"
+	} else {
+		statusText = "terjual"
+	}
+
+	return json.Marshal(struct {
+		SeatAlias
 		Status string `json:"status"`
 	}{
-		seatAlias: seatAlias(s),
-		Status:    "Terjual",
-	}
-
-	if s.Status {
-		alias.Status = "tersedia"
-	}
-
-	return json.Marshal(alias)
+		SeatAlias: SeatAlias(s),
+		Status:    statusText,
+	})
 }

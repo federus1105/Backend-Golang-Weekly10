@@ -35,10 +35,10 @@ func main() {
 	}
 	defer db.Close()
 
-	log.Println("✅ DB Connected")
+	log.Println("✅ DB Connected: ", err)
 
 	// Inisialisasi RDB
-	rdb, err := configs.InitRDB()
+	rdb, Rdb, err := configs.InitRDB()
 	if err != nil {
 		log.Println("❌ Failed to connect to redis\nCause: ", err.Error())
 		return
@@ -48,10 +48,10 @@ func main() {
 		fmt.Println("Failed Connected Redis : ", err.Error())
 		return
 	}
-	log.Println("✅ REDIS Connected")
+	log.Println("✅ REDIS Connected: ", Rdb)
 
 	router := routers.InitRouter(db, rdb)
-
-	router.Run("0.0.0.0:5021")
-	// router.Run("localhost:8080")
+	//
+	// router.Run("0.0.0.0:8080")
+	router.Run("localhost:8080")
 }

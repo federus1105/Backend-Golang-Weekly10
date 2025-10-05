@@ -1,1 +1,1 @@
-DROP TABLE public.actor;
+DROP TABLE actor;

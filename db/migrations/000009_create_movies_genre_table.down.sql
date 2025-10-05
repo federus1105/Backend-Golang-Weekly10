@@ -1,1 +1,1 @@
-DROP TABLE public.movies_genre;
+DROP TABLE movies_genre;

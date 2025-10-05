@@ -8,10 +8,11 @@ import (
 	// "github.com/jackc/pgx/v5/pgxpool"
 )
 
-func InitRDB() (*redis.Client, error) {
+func InitRDB() (*redis.Client, string, error) {
 	rdbUser := os.Getenv("REDISUSER")
 	rdbPass := os.Getenv("REDISPASS")
-	rdbHost := os.Getenv("REDISHOST")
+	// rdbHost := os.Getenv("REDISHOST")
+	rdbHost := os.Getenv("DBSHOST")
 	rdbPort := os.Getenv("REDISPORT")
 
 	rdb := redis.NewClient(&redis.Options{
@@ -20,5 +21,5 @@ func InitRDB() (*redis.Client, error) {
 		Password: rdbPass,
 		DB:       0,
 	})
-	return rdb, nil
+	return rdb, rdbUser, nil
 }

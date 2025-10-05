@@ -4,7 +4,7 @@
 
 -- DROP TABLE public.movies;
 
-CREATE TABLE public.movies (
+CREATE TABLE movies (
 	id int4 GENERATED ALWAYS AS IDENTITY( INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START 1 CACHE 1 NO CYCLE) NOT NULL,
 	image varchar(255) NULL,
 	backdrop varchar(255) NULL,

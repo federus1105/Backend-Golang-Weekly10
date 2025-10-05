@@ -1,4 +1,4 @@
-CREATE TABLE public.account (
+CREATE TABLE account (
 	image varchar(255) NULL,
 	firstname varchar(255) NULL,
 	lastname varchar(255) NULL,

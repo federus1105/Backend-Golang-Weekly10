@@ -1,1 +1,1 @@
-DROP TABLE public.cinema;
+DROP TABLE cinema;

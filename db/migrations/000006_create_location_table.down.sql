@@ -1,1 +1,1 @@
-DROP TABLE public.location;
+DROP TABLE location;

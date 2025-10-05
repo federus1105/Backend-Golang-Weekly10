@@ -1,1 +1,1 @@
-CREATE TABLE public.director;
+CREATE TABLE director;

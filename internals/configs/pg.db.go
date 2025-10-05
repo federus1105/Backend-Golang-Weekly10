@@ -3,6 +3,7 @@ package configs
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -16,8 +17,10 @@ func InitDB() (*pgxpool.Pool, error) {
 	dbName := os.Getenv("DBNAME")
 
 	connstring := fmt.Sprintf("postgres://%s:%s@%s:%s/%s", dbUser, dbPass, dbHost, dbPort, dbName)
+	log.Println(connstring)
 	return pgxpool.New(context.Background(), connstring)
 }
+
 func TestDB(db *pgxpool.Pool) error {
 	return db.Ping(context.Background())
 }

@@ -24,6 +24,7 @@ s.id,
 s.id_movie,
 s.date,
 		m.title AS title,
+c.id AS idcinema,
 c.name AS cinema,
 t.name AS time,
 l.name AS location,
@@ -45,7 +46,7 @@ ORDER BY s.date ASC`
 	var schedules []models.Schedule
 	for rows.Next() {
 		var schedule models.Schedule
-		if err := rows.Scan(&schedule.Id, &schedule.Idmovie, &schedule.Date, &schedule.Title, &schedule.Cinema, &schedule.Time, &schedule.Location, &schedule.Image,); err != nil {
+		if err := rows.Scan(&schedule.Id, &schedule.Idmovie, &schedule.Date, &schedule.Title, &schedule.Id_Cinema, &schedule.Cinema, &schedule.Time, &schedule.Location, &schedule.Image); err != nil {
 			return nil, err
 		}
 		schedules = append(schedules, schedule)
@@ -54,38 +55,38 @@ ORDER BY s.date ASC`
 }
 
 func (sr *ScheduleRepository) CreateSchedule(
-    rctx context.Context,
-    input models.BodyScheduleInput,
+	rctx context.Context,
+	input models.BodyScheduleInput,
 ) ([]models.BodySchedule, error) {
-    sql := `INSERT INTO schedule (id_movie, date, id_cinema, id_time, id_location)
+	sql := `INSERT INTO schedule (id_movie, date, id_cinema, id_time, id_location)
             VALUES ($1, $2, $3, $4, $5)
             RETURNING id, id_movie, date, id_cinema, id_time, id_location`
 
-    var createdSchedules []models.BodySchedule
+	var createdSchedules []models.BodySchedule
 
-    for _, cinemaID := range input.Id_Cinema {
-        for _, timeID := range input.Time {
-            for _, locationID := range input.Location {
-                values := []any{input.Id_movie, input.Date, cinemaID, timeID, locationID}
-                var newSchedule models.BodySchedule
+	for _, cinemaID := range input.Id_Cinema {
+		for _, timeID := range input.Time {
+			for _, locationID := range input.Location {
+				values := []any{input.Id_movie, input.Date, cinemaID, timeID, locationID}
+				var newSchedule models.BodySchedule
 
-                err := sr.db.QueryRow(rctx, sql, values...).Scan(
-                    &newSchedule.Id,
-                    &newSchedule.Id_movie,
-                    &newSchedule.Date,
-                    &newSchedule.Id_Cinema,
-                    &newSchedule.Id_Time,
-                    &newSchedule.Id_Location,
-                )
-                if err != nil {
-                    log.Println("Failed to insert schedule:", err)
-                    return nil, err
-                }
+				err := sr.db.QueryRow(rctx, sql, values...).Scan(
+					&newSchedule.Id,
+					&newSchedule.Id_movie,
+					&newSchedule.Date,
+					&newSchedule.Id_Cinema,
+					&newSchedule.Id_Time,
+					&newSchedule.Id_Location,
+				)
+				if err != nil {
+					log.Println("Failed to insert schedule:", err)
+					return nil, err
+				}
 
-                createdSchedules = append(createdSchedules, newSchedule)
-            }
-        }
-    }
+				createdSchedules = append(createdSchedules, newSchedule)
+			}
+		}
+	}
 
-    return createdSchedules, nil
+	return createdSchedules, nil
 }

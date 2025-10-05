@@ -13,5 +13,6 @@ func InitOrderRouter(router *gin.Engine, db *pgxpool.Pool) {
 	orderRepository := repositories.NewOrderRepository(db)
 	OrderHandler := handlers.NewOrderHandler(orderRepository)
 
-	orderRouter.POST("", middlewares.VerifyToken, middlewares.Access("User"), OrderHandler.CreateOrder)
+	orderRouter.POST("", middlewares.VerifyToken, middlewares.Access("User"), middlewares.AuthMiddleware(), OrderHandler.CreateOrder)
 }
+		
