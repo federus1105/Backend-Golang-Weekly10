@@ -11,8 +11,8 @@ import (
 func InitRDB() (*redis.Client, string, error) {
 	rdbUser := os.Getenv("REDISUSER")
 	rdbPass := os.Getenv("REDISPASS")
-	// rdbHost := os.Getenv("REDISHOST")
-	rdbHost := os.Getenv("DBSHOST")
+	rdbHost := os.Getenv("REDISHOST")
+	// rdbHost := os.Getenv("DBSHOST")
 	rdbPort := os.Getenv("REDISPORT")
 
 	rdb := redis.NewClient(&redis.Options{
