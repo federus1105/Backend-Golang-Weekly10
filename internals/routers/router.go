@@ -40,6 +40,7 @@ func InitRouter(db *pgxpool.Pool, rdb *redis.Client) *gin.Engine {
 	InitProfileRouter(router, db)
 	InitOrderRouter(router, db)
 	InitHistoryRouter(router, db)
+	InitPaymentRouter(router, db)
 
 	router.NoRoute(func(ctx *gin.Context) {
 		ctx.JSON(http.StatusNotFound, models.Response{
